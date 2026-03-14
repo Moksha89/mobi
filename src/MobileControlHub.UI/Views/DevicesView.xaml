@@ -1,0 +1,146 @@
+<UserControl x:Class="MobileControlHub.UI.Views.DevicesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <DockPanel Margin="0,8">
+
+        <!-- ==================== Top Toolbar ==================== -->
+        <Border DockPanel.Dock="Top" Style="{StaticResource CardPanel}">
+            <DockPanel>
+                <!-- Search box -->
+                <TextBox DockPanel.Dock="Left" Style="{StaticResource DarkTextBox}"
+                         Text="{Binding SearchFilter, UpdateSourceTrigger=PropertyChanged}"
+                         Width="250" Margin="0,0,12,0">
+                    <!-- Watermark placeholder via Tag -->
+                </TextBox>
+
+                <!-- Action buttons -->
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right">
+                    <Button Content="Refresh" Style="{StaticResource PrimaryButton}"
+                            Command="{Binding RefreshDevicesCommand}" Margin="0,0,8,0"/>
+                    <Button Content="Open All Selected" Style="{StaticResource SecondaryButton}"
+                            Command="{Binding OpenAllSelectedCommand}"/>
+                </StackPanel>
+
+                <!-- Status message -->
+                <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center"
+                           Foreground="{StaticResource TextSecondaryBrush}" FontSize="12"
+                           Margin="12,0"/>
+            </DockPanel>
+        </Border>
+
+        <!-- ==================== Loading Indicator ==================== -->
+        <Border DockPanel.Dock="Top"
+                Visibility="{Binding IsRefreshing, Converter={StaticResource BoolToVisibility}}"
+                Margin="0,4">
+            <TextBlock Text="Scanning devices..." Foreground="{StaticResource AccentBrush}"
+                       FontSize="12" HorizontalAlignment="Center"/>
+        </Border>
+
+        <!-- ==================== Device Grid ==================== -->
+        <DataGrid DockPanel.Dock="Top"
+                  Style="{StaticResource DarkDataGrid}"
+                  ItemsSource="{Binding FilteredDevices}"
+                  SelectedItem="{Binding SelectedDevice}"
+                  Margin="0,8,0,0">
+
+            <DataGrid.Columns>
+                <!-- Select checkbox -->
+                <DataGridTemplateColumn Header="" Width="40">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <CheckBox IsChecked="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}"
+                                      Style="{StaticResource DarkCheckBox}" HorizontalAlignment="Center"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- Status indicator -->
+                <DataGridTemplateColumn Header="Status" Width="60">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Ellipse Width="10" Height="10" HorizontalAlignment="Center">
+                                <Ellipse.Fill>
+                                    <SolidColorBrush Color="{Binding ConnectionState, Converter={StaticResource StateToColor}}"/>
+                                </Ellipse.Fill>
+                            </Ellipse>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- Device info columns -->
+                <DataGridTextColumn Header="Name" Binding="{Binding DisplayName}" Width="140"
+                                    Foreground="{StaticResource TextPrimaryBrush}"/>
+                <DataGridTextColumn Header="Serial" Binding="{Binding SerialNumber}" Width="160"
+                                    Foreground="{StaticResource TextSecondaryBrush}"/>
+                <DataGridTextColumn Header="Model" Binding="{Binding Model}" Width="120"
+                                    Foreground="{StaticResource TextSecondaryBrush}"/>
+                <DataGridTextColumn Header="Manufacturer" Binding="{Binding Manufacturer}" Width="100"
+                                    Foreground="{StaticResource TextSecondaryBrush}"/>
+                <DataGridTextColumn Header="Android" Binding="{Binding AndroidVersion}" Width="70"
+                                    Foreground="{StaticResource TextSecondaryBrush}"/>
+                <DataGridTextColumn Header="Type" Binding="{Binding ConnectionType}" Width="60"
+                                    Foreground="{StaticResource TextSecondaryBrush}"/>
+
+                <!-- Battery with color -->
+                <DataGridTemplateColumn Header="Battery" Width="70">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock FontSize="12">
+                                <TextBlock.Text>
+                                    <Binding Path="BatteryLevel" StringFormat="{}{0}%"/>
+                                </TextBlock.Text>
+                                <TextBlock.Foreground>
+                                    <SolidColorBrush Color="{Binding BatteryLevel, Converter={StaticResource BatteryToColor}}"/>
+                                </TextBlock.Foreground>
+                            </TextBlock>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- scrcpy session indicator -->
+                <DataGridTemplateColumn Header="Session" Width="70">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding HasActiveSession, StringFormat='{}{0}'}"
+                                       FontSize="11" HorizontalAlignment="Center">
+                                <TextBlock.Foreground>
+                                    <SolidColorBrush Color="{Binding HasActiveSession, Converter={StaticResource BoolToStatusColor}}"/>
+                                </TextBlock.Foreground>
+                            </TextBlock>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- Action Buttons -->
+                <DataGridTemplateColumn Header="Actions" Width="*" MinWidth="300">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal">
+                                <Button Content="scrcpy" Style="{StaticResource SecondaryButton}"
+                                        Command="{Binding DataContext.OpenScrcpyCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                        CommandParameter="{Binding}" Margin="0,0,4,0" Padding="8,4"/>
+                                <Button Content="Stop" Style="{StaticResource DangerButton}"
+                                        Command="{Binding DataContext.CloseScrcpyCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                        CommandParameter="{Binding}" Margin="0,0,4,0" Padding="8,4"/>
+                                <Button Content="Reconnect" Style="{StaticResource SecondaryButton}"
+                                        Command="{Binding DataContext.ReconnectCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                        CommandParameter="{Binding}" Margin="0,0,4,0" Padding="8,4"/>
+                                <Button Content="Screenshot" Style="{StaticResource SecondaryButton}"
+                                        Command="{Binding DataContext.ScreenshotCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                        CommandParameter="{Binding}" Margin="0,0,4,0" Padding="8,4"/>
+                                <Button Content="Reboot" Style="{StaticResource DangerButton}"
+                                        Command="{Binding DataContext.RebootCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                        CommandParameter="{Binding}" Margin="0,0,4,0" Padding="8,4"/>
+                                <Button Content="Copy" Style="{StaticResource SecondaryButton}"
+                                        Command="{Binding DataContext.CopyInfoCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                        CommandParameter="{Binding}" Padding="8,4"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+            </DataGrid.Columns>
+        </DataGrid>
+
+    </DockPanel>
+</UserControl>

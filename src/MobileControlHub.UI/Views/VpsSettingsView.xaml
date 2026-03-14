@@ -1,0 +1,127 @@
+<UserControl x:Class="MobileControlHub.UI.Views.VpsSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <StackPanel Margin="0,8" MaxWidth="700" HorizontalAlignment="Left">
+
+        <!-- ==================== VPS Host Configuration ==================== -->
+        <Border Style="{StaticResource CardPanel}">
+            <StackPanel>
+                <TextBlock Text="VPS Host" Style="{StaticResource SubheadingStyle}" Margin="0,0,0,12"/>
+
+                <TextBlock Text="Host / IP Address" Style="{StaticResource LabelStyle}"/>
+                <TextBox Style="{StaticResource DarkTextBox}" Text="{Binding VpsHost, UpdateSourceTrigger=PropertyChanged}"
+                         Margin="0,0,0,8"/>
+
+                <TextBlock Text="SSH Port" Style="{StaticResource LabelStyle}"/>
+                <TextBox Style="{StaticResource DarkTextBox}" Text="{Binding SshPort, UpdateSourceTrigger=PropertyChanged}"
+                         Width="120" HorizontalAlignment="Left" Margin="0,0,0,8"/>
+
+                <!-- VPS status -->
+                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                    <Ellipse Width="10" Height="10" Margin="0,0,8,0" VerticalAlignment="Center">
+                        <Ellipse.Fill>
+                            <SolidColorBrush Color="{Binding IsVpsReachable, Converter={StaticResource BoolToStatusColor}}"/>
+                        </Ellipse.Fill>
+                    </Ellipse>
+                    <TextBlock Text="{Binding IsVpsReachable, StringFormat='VPS Reachable: {0}'}"
+                               Foreground="{StaticResource TextSecondaryBrush}" FontSize="12"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- ==================== RustDesk Server Config ==================== -->
+        <Border Style="{StaticResource CardPanel}">
+            <StackPanel>
+                <TextBlock Text="RustDesk Server Configuration" Style="{StaticResource SubheadingStyle}" Margin="0,0,0,12"/>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="120"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition/>
+                        <RowDefinition/>
+                        <RowDefinition/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Relay Server -->
+                    <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,8,8">
+                        <TextBlock Text="Relay Server (leave blank to use VPS host)" Style="{StaticResource LabelStyle}"/>
+                        <TextBox Style="{StaticResource DarkTextBox}" Text="{Binding RelayServer, UpdateSourceTrigger=PropertyChanged}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,0,8">
+                        <TextBlock Text="Relay Port" Style="{StaticResource LabelStyle}"/>
+                        <TextBox Style="{StaticResource DarkTextBox}" Text="{Binding RelayPort, UpdateSourceTrigger=PropertyChanged}"/>
+                    </StackPanel>
+
+                    <!-- ID Server -->
+                    <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,8,8">
+                        <TextBlock Text="ID / Rendezvous Server (leave blank to use VPS host)" Style="{StaticResource LabelStyle}"/>
+                        <TextBox Style="{StaticResource DarkTextBox}" Text="{Binding IdServer, UpdateSourceTrigger=PropertyChanged}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,0,0,8">
+                        <TextBlock Text="ID Port" Style="{StaticResource LabelStyle}"/>
+                        <TextBox Style="{StaticResource DarkTextBox}" Text="{Binding IdPort, UpdateSourceTrigger=PropertyChanged}"/>
+                    </StackPanel>
+
+                    <!-- API Port -->
+                    <StackPanel Grid.Row="2" Grid.Column="1" Margin="0,0,0,8">
+                        <TextBlock Text="API Port" Style="{StaticResource LabelStyle}"/>
+                        <TextBox Style="{StaticResource DarkTextBox}" Text="{Binding ApiPort, UpdateSourceTrigger=PropertyChanged}"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- Status indicators -->
+                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,16,0">
+                        <Ellipse Width="10" Height="10" Margin="0,0,6,0" VerticalAlignment="Center">
+                            <Ellipse.Fill>
+                                <SolidColorBrush Color="{Binding IsRelayReachable, Converter={StaticResource BoolToStatusColor}}"/>
+                            </Ellipse.Fill>
+                        </Ellipse>
+                        <TextBlock Text="Relay" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="10" Height="10" Margin="0,0,6,0" VerticalAlignment="Center">
+                            <Ellipse.Fill>
+                                <SolidColorBrush Color="{Binding IsIdServerReachable, Converter={StaticResource BoolToStatusColor}}"/>
+                            </Ellipse.Fill>
+                        </Ellipse>
+                        <TextBlock Text="ID Server" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12"/>
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- ==================== RustDesk Client ==================== -->
+        <Border Style="{StaticResource CardPanel}">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Left">
+                    <TextBlock Text="RustDesk Client" Style="{StaticResource SubheadingStyle}"/>
+                    <TextBlock Text="{Binding RustDeskStatus, StringFormat='Status: {0}'}"
+                               Foreground="{StaticResource TextSecondaryBrush}" FontSize="12"/>
+                </StackPanel>
+                <Button Content="Launch RustDesk" Style="{StaticResource SecondaryButton}"
+                        Command="{Binding LaunchRustDeskCommand}"
+                        DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+            </DockPanel>
+        </Border>
+
+        <!-- ==================== Action Buttons ==================== -->
+        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+            <Button Content="Test Connection" Style="{StaticResource PrimaryButton}"
+                    Command="{Binding TestConnectionCommand}"
+                    IsEnabled="{Binding IsTesting, Converter={StaticResource BoolToVisibility}, ConverterParameter=Inverse}"
+                    Margin="0,0,8,0"/>
+            <Button Content="Save Configuration" Style="{StaticResource PrimaryButton}"
+                    Command="{Binding SaveCommand}" Margin="0,0,8,0"/>
+        </StackPanel>
+
+        <!-- Status message -->
+        <TextBlock Text="{Binding StatusMessage}" Foreground="{StaticResource TextSecondaryBrush}"
+                   FontSize="12" Margin="0,8,0,0"/>
+
+    </StackPanel>
+</UserControl>

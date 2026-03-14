@@ -1,0 +1,92 @@
+<UserControl x:Class="MobileControlHub.UI.Views.LogsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <DockPanel Margin="0,8">
+
+        <!-- ==================== Filter Toolbar ==================== -->
+        <Border DockPanel.Dock="Top" Style="{StaticResource CardPanel}">
+            <DockPanel>
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                    <TextBlock Text="Filter:" Foreground="{StaticResource TextSecondaryBrush}"
+                               VerticalAlignment="Center" Margin="0,0,8,0" FontSize="12"/>
+                    <Button Content="All" Style="{StaticResource SecondaryButton}"
+                            Command="{Binding ShowAllCommand}" Margin="0,0,4,0" Padding="10,4"/>
+                    <Button Content="Info" Style="{StaticResource SecondaryButton}"
+                            Command="{Binding ShowInfoCommand}" Margin="0,0,4,0" Padding="10,4"/>
+                    <Button Content="Warning" Style="{StaticResource SecondaryButton}"
+                            Command="{Binding ShowWarningsCommand}" Margin="0,0,4,0" Padding="10,4"/>
+                    <Button Content="Error" Style="{StaticResource SecondaryButton}"
+                            Command="{Binding ShowErrorsCommand}" Margin="0,0,4,0" Padding="10,4"/>
+
+                    <TextBlock Text="Device:" Foreground="{StaticResource TextSecondaryBrush}"
+                               VerticalAlignment="Center" Margin="12,0,8,0" FontSize="12"/>
+                    <TextBox Style="{StaticResource DarkTextBox}" Width="150"
+                             Text="{Binding DeviceFilter, UpdateSourceTrigger=PropertyChanged}"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right">
+                    <TextBlock Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"
+                               FontSize="11" Margin="0,0,8,0"
+                               Text="{Binding LogCount, StringFormat='{}{0} entries'}"/>
+                    <Button Content="Refresh" Style="{StaticResource SecondaryButton}"
+                            Command="{Binding RefreshCommand}" Margin="0,0,4,0"/>
+                    <Button Content="Clear" Style="{StaticResource DangerButton}"
+                            Command="{Binding ClearLogsCommand}"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- ==================== Log Entries ==================== -->
+        <Border Background="{StaticResource CardBgBrush}" CornerRadius="8" Margin="0,8,0,0" Padding="8">
+            <ListView ItemsSource="{Binding Logs}" Style="{StaticResource DarkListView}"
+                      ScrollViewer.VerticalScrollBarVisibility="Auto"
+                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <DockPanel Margin="4,3">
+                            <!-- Timestamp -->
+                            <TextBlock DockPanel.Dock="Left" FontSize="11" FontFamily="Consolas"
+                                       Foreground="{StaticResource TextMutedBrush}"
+                                       Text="{Binding Timestamp, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}"
+                                       Width="130" VerticalAlignment="Center"/>
+
+                            <!-- Level badge -->
+                            <Border DockPanel.Dock="Left" CornerRadius="3" Padding="6,2" Margin="4,0"
+                                    Width="55" HorizontalAlignment="Center">
+                                <Border.Background>
+                                    <SolidColorBrush Color="{Binding Level, Converter={StaticResource LogLevelToColor}}" Opacity="0.2"/>
+                                </Border.Background>
+                                <TextBlock Text="{Binding Level}" FontSize="10" FontWeight="SemiBold"
+                                           HorizontalAlignment="Center">
+                                    <TextBlock.Foreground>
+                                        <SolidColorBrush Color="{Binding Level, Converter={StaticResource LogLevelToColor}}"/>
+                                    </TextBlock.Foreground>
+                                </TextBlock>
+                            </Border>
+
+                            <!-- Category -->
+                            <TextBlock DockPanel.Dock="Left" FontSize="11"
+                                       Foreground="{StaticResource AccentBrush}"
+                                       Text="{Binding Category, StringFormat='[{0}]'}"
+                                       Width="80" VerticalAlignment="Center" Margin="4,0"/>
+
+                            <!-- Device serial (if present) -->
+                            <TextBlock DockPanel.Dock="Left" FontSize="10"
+                                       Foreground="{StaticResource TextMutedBrush}"
+                                       Text="{Binding DeviceSerial}"
+                                       Width="100" VerticalAlignment="Center" Margin="4,0"
+                                       TextTrimming="CharacterEllipsis"/>
+
+                            <!-- Message -->
+                            <TextBlock FontSize="12" Foreground="{StaticResource TextPrimaryBrush}"
+                                       Text="{Binding Message}" TextTrimming="CharacterEllipsis"
+                                       VerticalAlignment="Center" Margin="4,0"/>
+                        </DockPanel>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </Border>
+
+    </DockPanel>
+</UserControl>

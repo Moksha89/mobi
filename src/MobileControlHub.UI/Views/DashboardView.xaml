@@ -1,0 +1,153 @@
+<UserControl x:Class="MobileControlHub.UI.Views.DashboardView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <StackPanel Margin="0,8">
+
+        <!-- ==================== Status Cards Row ==================== -->
+        <UniformGrid Columns="5" Margin="0,0,0,16">
+
+            <!-- ADB Status -->
+            <Border Style="{StaticResource CardPanel}" Margin="0,0,8,0">
+                <StackPanel>
+                    <TextBlock Text="ADB" Style="{StaticResource LabelStyle}"/>
+                    <TextBlock Text="{Binding AdbVersion}" FontSize="13"
+                               Foreground="{StaticResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis"/>
+                    <Ellipse Width="10" Height="10" Margin="0,6,0,0" HorizontalAlignment="Left">
+                        <Ellipse.Fill>
+                            <SolidColorBrush Color="{Binding IsAdbAvailable, Converter={StaticResource BoolToStatusColor}}"/>
+                        </Ellipse.Fill>
+                    </Ellipse>
+                </StackPanel>
+            </Border>
+
+            <!-- scrcpy Status -->
+            <Border Style="{StaticResource CardPanel}" Margin="4,0">
+                <StackPanel>
+                    <TextBlock Text="scrcpy" Style="{StaticResource LabelStyle}"/>
+                    <TextBlock Text="{Binding ScrcpyVersion}" FontSize="13"
+                               Foreground="{StaticResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis"/>
+                    <Ellipse Width="10" Height="10" Margin="0,6,0,0" HorizontalAlignment="Left">
+                        <Ellipse.Fill>
+                            <SolidColorBrush Color="{Binding IsScrcpyAvailable, Converter={StaticResource BoolToStatusColor}}"/>
+                        </Ellipse.Fill>
+                    </Ellipse>
+                </StackPanel>
+            </Border>
+
+            <!-- RustDesk Status -->
+            <Border Style="{StaticResource CardPanel}" Margin="4,0">
+                <StackPanel>
+                    <TextBlock Text="RustDesk" Style="{StaticResource LabelStyle}"/>
+                    <TextBlock Text="{Binding RustDeskStatus}" FontSize="13"
+                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                    <Ellipse Width="10" Height="10" Margin="0,6,0,0" HorizontalAlignment="Left">
+                        <Ellipse.Fill>
+                            <SolidColorBrush Color="{Binding IsRustDeskRunning, Converter={StaticResource BoolToStatusColor}}"/>
+                        </Ellipse.Fill>
+                    </Ellipse>
+                </StackPanel>
+            </Border>
+
+            <!-- Devices -->
+            <Border Style="{StaticResource CardPanel}" Margin="4,0">
+                <StackPanel>
+                    <TextBlock Text="Devices" Style="{StaticResource LabelStyle}"/>
+                    <TextBlock FontSize="24" FontWeight="Bold"
+                               Foreground="{StaticResource AccentBrush}"
+                               Text="{Binding ConnectedDeviceCount}"/>
+                    <TextBlock Text="connected" Style="{StaticResource LabelStyle}" Margin="0"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Sessions -->
+            <Border Style="{StaticResource CardPanel}" Margin="8,0,0,0">
+                <StackPanel>
+                    <TextBlock Text="Sessions" Style="{StaticResource LabelStyle}"/>
+                    <TextBlock FontSize="24" FontWeight="Bold"
+                               Foreground="{StaticResource AccentBrush}"
+                               Text="{Binding ActiveSessionCount}"/>
+                    <TextBlock Text="active" Style="{StaticResource LabelStyle}" Margin="0"/>
+                </StackPanel>
+            </Border>
+        </UniformGrid>
+
+        <!-- ==================== Monitor Controls ==================== -->
+        <Border Style="{StaticResource CardPanel}">
+            <DockPanel>
+                <TextBlock Text="Background Monitor" Style="{StaticResource SubheadingStyle}"
+                           DockPanel.Dock="Left" VerticalAlignment="Center"/>
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right">
+                    <Ellipse Width="10" Height="10" Margin="0,0,8,0" VerticalAlignment="Center">
+                        <Ellipse.Fill>
+                            <SolidColorBrush Color="{Binding IsMonitorRunning, Converter={StaticResource BoolToStatusColor}}"/>
+                        </Ellipse.Fill>
+                    </Ellipse>
+                    <TextBlock Text="{Binding IsMonitorRunning, StringFormat='{}{0}'}"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               VerticalAlignment="Center" Margin="0,0,12,0" FontSize="12"/>
+                    <Button Content="Start" Style="{StaticResource PrimaryButton}"
+                            Command="{Binding StartMonitorCommand}"
+                            Visibility="{Binding IsMonitorRunning, Converter={StaticResource BoolToVisibility}, ConverterParameter=Inverse}"
+                            Margin="0,0,4,0"/>
+                    <Button Content="Stop" Style="{StaticResource DangerButton}"
+                            Command="{Binding StopMonitorCommand}"
+                            Visibility="{Binding IsMonitorRunning, Converter={StaticResource BoolToVisibility}}"/>
+                    <Button Content="Refresh" Style="{StaticResource SecondaryButton}"
+                            Command="{Binding RefreshCommand}" Margin="4,0,0,0"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- ==================== Alerts ==================== -->
+        <Border Style="{StaticResource CardPanel}"
+                Visibility="{Binding Alerts.Count, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel>
+                <TextBlock Text="Alerts" Style="{StaticResource SubheadingStyle}" Margin="0,0,0,8"/>
+                <ItemsControl ItemsSource="{Binding Alerts}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="#30F38BA8" CornerRadius="4" Padding="10,6" Margin="0,0,0,4">
+                                <TextBlock Text="{Binding}" Foreground="{StaticResource ErrorBrush}" FontSize="12"/>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
+
+        <!-- ==================== Recent Logs ==================== -->
+        <Border Style="{StaticResource CardPanel}">
+            <StackPanel>
+                <TextBlock Text="Recent Activity" Style="{StaticResource SubheadingStyle}" Margin="0,0,0,8"/>
+                <ItemsControl ItemsSource="{Binding RecentLogs}" MaxHeight="300">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <DockPanel Margin="0,2">
+                                <TextBlock DockPanel.Dock="Left" FontSize="11"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           Text="{Binding Timestamp, StringFormat='{}{0:HH:mm:ss}'}"
+                                           Width="60"/>
+                                <Border DockPanel.Dock="Left" CornerRadius="3" Padding="4,1" Margin="4,0"
+                                        Width="50" HorizontalAlignment="Left">
+                                    <Border.Background>
+                                        <SolidColorBrush Color="{Binding Level, Converter={StaticResource LogLevelToColor}}" Opacity="0.2"/>
+                                    </Border.Background>
+                                    <TextBlock Text="{Binding Level}" FontSize="10" HorizontalAlignment="Center">
+                                        <TextBlock.Foreground>
+                                            <SolidColorBrush Color="{Binding Level, Converter={StaticResource LogLevelToColor}}"/>
+                                        </TextBlock.Foreground>
+                                    </TextBlock>
+                                </Border>
+                                <TextBlock Text="{Binding Message}" FontSize="12"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           TextTrimming="CharacterEllipsis" Margin="4,0,0,0"/>
+                            </DockPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
+
+    </StackPanel>
+</UserControl>
