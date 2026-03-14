@@ -30,7 +30,7 @@ builder.Services.AddEndpointsApiExplorer();
 
 // Register infrastructure services
 builder.Services.AddSingleton<DatabaseManager>();
-builder.Services.AddSingleton<ProcessRunner>();
+// ProcessRunner is a static utility class - no DI registration needed
 builder.Services.AddSingleton<IConfigurationService, ConfigurationService>();
 builder.Services.AddSingleton<ILogService, LogService>();
 builder.Services.AddSingleton<IAdbService, AdbService>();
