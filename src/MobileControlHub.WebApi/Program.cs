@@ -1,0 +1,64 @@
+using MobileControlHub.Domain.Interfaces;
+using MobileControlHub.Infrastructure.Data;
+using MobileControlHub.Infrastructure.Helpers;
+using MobileControlHub.Infrastructure.Services;
+using MobileControlHub.WebApi.Hubs;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// CORS - allow the React dev server and any origin for local network access
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
+    options.AddPolicy("SignalR", policy =>
+    {
+        policy.SetIsOriginAllowed(_ => true)
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .AllowCredentials();
+    });
+});
+
+builder.Services.AddControllers();
+builder.Services.AddSignalR();
+builder.Services.AddEndpointsApiExplorer();
+
+// Register infrastructure services
+builder.Services.AddSingleton<DatabaseManager>();
+builder.Services.AddSingleton<ProcessRunner>();
+builder.Services.AddSingleton<IConfigurationService, ConfigurationService>();
+builder.Services.AddSingleton<ILogService, LogService>();
+builder.Services.AddSingleton<IAdbService, AdbService>();
+builder.Services.AddSingleton<IScrcpyService, ScrcpyService>();
+builder.Services.AddSingleton<IRustDeskService, RustDeskService>();
+builder.Services.AddSingleton<IDeviceMonitorService, DeviceMonitorService>();
+
+// Serve static files (React build output)
+builder.Services.AddDirectoryBrowser();
+
+var app = builder.Build();
+
+// Initialize the database
+var dbManager = app.Services.GetRequiredService<DatabaseManager>();
+await dbManager.InitializeAsync();
+
+// Start the device monitor
+var monitor = app.Services.GetRequiredService<IDeviceMonitorService>();
+_ = monitor.StartAsync();
+
+app.UseCors();
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
+app.MapControllers();
+app.MapHub<DeviceHub>("/hubs/devices").RequireCors("SignalR");
+
+// Fallback to index.html for SPA routing
+app.MapFallbackToFile("index.html");
+
+app.Run();

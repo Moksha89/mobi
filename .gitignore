@@ -54,3 +54,11 @@ tools/*.dll
 ## Local config overrides
 appsettings.Development.json
 appsettings.Local.json
+
+## Node.js / React
+node_modules/
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+npm-debug.log*
