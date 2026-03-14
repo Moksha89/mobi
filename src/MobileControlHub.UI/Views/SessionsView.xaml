@@ -1,0 +1,75 @@
+<UserControl x:Class="MobileControlHub.UI.Views.SessionsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <DockPanel Margin="0,8">
+
+        <!-- ==================== Top Toolbar ==================== -->
+        <Border DockPanel.Dock="Top" Style="{StaticResource CardPanel}">
+            <DockPanel>
+                <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center"
+                           Foreground="{StaticResource TextSecondaryBrush}" FontSize="12"
+                           DockPanel.Dock="Left"/>
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right">
+                    <Button Content="Refresh" Style="{StaticResource PrimaryButton}"
+                            Command="{Binding RefreshCommand}" Margin="0,0,8,0"/>
+                    <Button Content="Stop All" Style="{StaticResource DangerButton}"
+                            Command="{Binding StopAllCommand}"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- ==================== Sessions List ==================== -->
+        <ItemsControl ItemsSource="{Binding Sessions}" Margin="0,8,0,0">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <Border Style="{StaticResource CardPanel}">
+                        <DockPanel>
+                            <!-- Session info -->
+                            <StackPanel DockPanel.Dock="Left">
+                                <TextBlock FontSize="14" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextPrimaryBrush}">
+                                    <Run Text="Device: "/><Run Text="{Binding DeviceSerial}"/>
+                                </TextBlock>
+                                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                    <TextBlock FontSize="12" Foreground="{StaticResource TextMutedBrush}">
+                                        <Run Text="State: "/><Run Text="{Binding State}"/>
+                                    </TextBlock>
+                                    <TextBlock FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="16,0,0,0">
+                                        <Run Text="PID: "/><Run Text="{Binding ProcessId}"/>
+                                    </TextBlock>
+                                    <TextBlock FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="16,0,0,0">
+                                        <Run Text="Started: "/><Run Text="{Binding StartedAt, StringFormat='{}{0:HH:mm:ss}'}"/>
+                                    </TextBlock>
+                                    <TextBlock FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="16,0,0,0">
+                                        <Run Text="Restarts: "/><Run Text="{Binding RestartCount}"/>
+                                    </TextBlock>
+                                </StackPanel>
+                                <TextBlock FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0"
+                                           Text="{Binding CustomArguments, StringFormat='Args: {0}'}"
+                                           TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+
+                            <!-- Actions -->
+                            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right"
+                                        HorizontalAlignment="Right" VerticalAlignment="Center">
+                                <Button Content="Restart" Style="{StaticResource SecondaryButton}"
+                                        Command="{Binding DataContext.RestartSessionCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                        CommandParameter="{Binding}" Margin="0,0,8,0"/>
+                                <Button Content="Stop" Style="{StaticResource DangerButton}"
+                                        Command="{Binding DataContext.StopSessionCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                        CommandParameter="{Binding}"/>
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <!-- Empty state -->
+        <TextBlock Text="No active scrcpy sessions"
+                   Foreground="{StaticResource TextMutedBrush}"
+                   FontSize="14" HorizontalAlignment="Center" Margin="0,40,0,0"
+                   Visibility="{Binding Sessions.Count, Converter={StaticResource BoolToVisibility}, ConverterParameter=Inverse}"/>
+    </DockPanel>
+</UserControl>
