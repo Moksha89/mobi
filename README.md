@@ -132,13 +132,47 @@ MobileControlHub/
 
 ---
 
-## Setup & Build Instructions
+## Quick Start (Automated Setup)
+
+The easiest way to get started on Windows:
+
+```
+1. git clone https://github.com/Moksha89/mobi.git
+2. cd mobi
+3. Double-click setup.bat
+```
+
+The setup script will automatically:
+- Check/install .NET 8 SDK
+- Download ADB (Android Debug Bridge)
+- Download scrcpy (screen mirroring)
+- Build the application
+- Offer to launch the web dashboard
+
+**Alternative:** Run directly in PowerShell:
+```powershell
+powershell -ExecutionPolicy Bypass -File setup.ps1
+```
+
+**Flags:**
+| Flag | Description |
+|------|-------------|
+| `-SkipDotNet` | Skip .NET SDK check/install |
+| `-SkipTools` | Skip ADB and scrcpy download |
+| `-SkipBuild` | Skip building the solution |
+| `-LaunchAfterSetup` | Auto-launch dashboard after setup |
+
+After setup, double-click **`start.bat`** to launch the web dashboard at `http://localhost:5000`.
+
+---
+
+## Setup & Build Instructions (Manual)
 
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/Moksha89/mobile-control-hub.git
-cd mobile-control-hub
+git clone https://github.com/Moksha89/mobi.git
+cd mobi
 ```
 
 ### 2. Place External Tools
@@ -171,10 +205,16 @@ dotnet build --configuration Release
 
 ### 4. Run
 
+**Web Dashboard:**
+```bash
+dotnet run --project src/MobileControlHub.WebApi
+```
+Then open `http://localhost:5000` in any browser. Access from other devices on your network at `http://<your-pc-ip>:5000`.
+
+**Desktop App (WPF):**
 ```bash
 dotnet run --project src/MobileControlHub.UI
 ```
-
 Or press F5 in Visual Studio.
 
 ### 5. Publish (Self-Contained)
@@ -184,6 +224,18 @@ dotnet publish src/MobileControlHub.UI -c Release -r win-x64 --self-contained tr
 ```
 
 Copy the `tools/` folder into the `publish/` directory.
+
+---
+
+## Connecting Android Phones
+
+1. **Enable USB Debugging** on each phone:
+   - Go to **Settings → About Phone → tap "Build Number" 7 times**
+   - Go to **Settings → Developer Options → enable "USB Debugging"**
+2. **Connect phones via USB** to your Windows PC (use a powered USB hub for multiple phones)
+3. **Authorize the PC**: Tap **Allow** on the USB debugging prompt (check "Always allow")
+4. **Verify**: Run `tools\adb.exe devices` — you should see your phone serial numbers
+5. **Open the dashboard** at `http://localhost:5000` → **Devices** page → click **Rescan**
 
 ---
 
