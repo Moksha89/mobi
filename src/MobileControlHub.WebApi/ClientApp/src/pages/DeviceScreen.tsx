@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, RotateCcw, Home, Square, ChevronUp, ChevronDown,
-  Power, Type, Volume2, VolumeX, Maximize2, Minimize2, Sun
+  ArrowLeft, RotateCcw, Home, Square, ChevronUp, ChevronDown, ChevronLeft, ChevronRight,
+  Power, Type, Volume2, VolumeX, Maximize2, Minimize2, Sun, Lock, Unlock, Bell,
+  Camera, RotateCw, Trash2, Clipboard, Search, Settings
 } from 'lucide-react';
 
 const API_BASE = '/api';
@@ -23,36 +24,50 @@ function DeviceScreen() {
   const [fps, setFps] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [textInput, setTextInput] = useState('');
+  const [pinInput, setPinInput] = useState('');
   const [showTextInput, setShowTextInput] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
-  const [swipeStart, setSwipeStart] = useState<{ x: number; y: number } | null>(null);
+
+  // Touch tracking refs to avoid stale closure issues
+  const swipeStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  const isDraggingRef = useRef(false);
 
   const frameCountRef = useRef(0);
   const streamingRef = useRef(true);
+  const fetchingRef = useRef(false);
 
   // Fetch screen info on mount
   useEffect(() => {
     if (!serial) return;
     fetch(`${API_BASE}/devices/${serial}/screen/info`)
       .then(r => r.json())
-      .then(data => setScreenInfo(data))
+      .then(data => {
+        if (data.width && data.height) setScreenInfo(data);
+      })
       .catch(() => {});
   }, [serial]);
 
-  // Screenshot streaming loop
+  // Screenshot streaming loop — optimized: fetch as fast as network allows
   useEffect(() => {
     if (!serial || !streaming) return;
     streamingRef.current = true;
+    fetchingRef.current = false;
     let cancelled = false;
 
     const fetchFrame = async () => {
       while (!cancelled && streamingRef.current) {
+        if (fetchingRef.current) {
+          await new Promise(r => setTimeout(r, 30));
+          continue;
+        }
+        fetchingRef.current = true;
         try {
           const res = await fetch(`${API_BASE}/devices/${serial}/screen?_t=${Date.now()}`);
           if (!res.ok) {
             setError(`Screenshot failed (${res.status})`);
-            await new Promise(r => setTimeout(r, 2000));
+            await new Promise(r => setTimeout(r, 1000));
+            fetchingRef.current = false;
             continue;
           }
           const blob = await res.blob();
@@ -67,11 +82,11 @@ function DeviceScreen() {
         } catch {
           if (!cancelled) {
             setError('Connection lost. Retrying...');
-            await new Promise(r => setTimeout(r, 2000));
+            await new Promise(r => setTimeout(r, 1500));
           }
         }
-        // Small delay between frames to avoid hammering
-        await new Promise(r => setTimeout(r, 150));
+        fetchingRef.current = false;
+        await new Promise(r => setTimeout(r, 30));
       }
     };
 
@@ -95,15 +110,17 @@ function DeviceScreen() {
     const img = imgRef.current;
     if (!img) return null;
     const rect = img.getBoundingClientRect();
-    const relX = (clientX - rect.left) / rect.width;
-    const relY = (clientY - rect.top) / rect.height;
+    const clampedX = Math.max(rect.left, Math.min(clientX, rect.right));
+    const clampedY = Math.max(rect.top, Math.min(clientY, rect.bottom));
+    const relX = (clampedX - rect.left) / rect.width;
+    const relY = (clampedY - rect.top) / rect.height;
     return {
-      x: Math.round(relX * screenInfo.width),
-      y: Math.round(relY * screenInfo.height),
+      x: Math.round(Math.max(0, Math.min(relX * screenInfo.width, screenInfo.width - 1))),
+      y: Math.round(Math.max(0, Math.min(relY * screenInfo.height, screenInfo.height - 1))),
     };
   }, [screenInfo]);
 
-  const sendAction = async (url: string, body: unknown) => {
+  const sendAction = useCallback(async (url: string, body: unknown) => {
     try {
       const res = await fetch(`${API_BASE}/devices/${serial}/screen/${url}`, {
         method: 'POST',
@@ -117,47 +134,83 @@ function DeviceScreen() {
     } catch (e) {
       showMsg(`Error: ${(e as Error).message}`);
     }
-  };
+  }, [serial]);
 
   const showMsg = (msg: string) => {
     setActionMsg(msg);
     setTimeout(() => setActionMsg(null), 2000);
   };
 
-  // Handle tap on screen image
-  const handleMouseDown = (e: React.MouseEvent) => {
+  // Pointer handlers (work for both mouse and touch)
+  const handlePointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
     const coords = mapCoordinates(e.clientX, e.clientY);
-    if (coords) setSwipeStart(coords);
+    if (coords) {
+      swipeStartRef.current = { ...coords, time: Date.now() };
+      isDraggingRef.current = true;
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    }
   };
 
-  const handleMouseUp = (e: React.MouseEvent) => {
+  const handlePointerUp = (e: React.PointerEvent) => {
+    e.preventDefault();
+    if (!isDraggingRef.current || !swipeStartRef.current) {
+      isDraggingRef.current = false;
+      swipeStartRef.current = null;
+      return;
+    }
     const endCoords = mapCoordinates(e.clientX, e.clientY);
-    if (!swipeStart || !endCoords) { setSwipeStart(null); return; }
+    const start = swipeStartRef.current;
+    isDraggingRef.current = false;
+    swipeStartRef.current = null;
+    if (!endCoords) return;
 
-    const dx = endCoords.x - swipeStart.x;
-    const dy = endCoords.y - swipeStart.y;
+    const dx = endCoords.x - start.x;
+    const dy = endCoords.y - start.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
+    const elapsed = Date.now() - start.time;
 
-    if (dist < 20) {
-      // It's a tap
-      sendAction('tap', { x: swipeStart.x, y: swipeStart.y });
+    if (dist < 30) {
+      sendAction('tap', { x: start.x, y: start.y });
     } else {
-      // It's a swipe
+      const duration = Math.max(150, Math.min(elapsed, 800));
       sendAction('swipe', {
-        x1: swipeStart.x, y1: swipeStart.y,
+        x1: start.x, y1: start.y,
         x2: endCoords.x, y2: endCoords.y,
-        durationMs: 300,
+        durationMs: duration,
       });
     }
-    setSwipeStart(null);
   };
 
-  const sendKey = (keyCode: number) => sendAction('key', { keyCode });
+  const handlePointerCancel = () => {
+    isDraggingRef.current = false;
+    swipeStartRef.current = null;
+  };
+
+  const sendKey = useCallback((keyCode: number) => sendAction('key', { keyCode }), [sendAction]);
+
   const sendText = () => {
     if (textInput.trim()) {
       sendAction('text', { text: textInput });
       setTextInput('');
     }
+  };
+
+  // PIN pad helpers — sends Android keycodes for digits 0-9
+  const sendPinDigit = (digit: number) => {
+    const keycode = digit === 0 ? 7 : 7 + digit; // KEYCODE_0=7, KEYCODE_1=8, ..., KEYCODE_9=16
+    sendKey(keycode);
+    setPinInput(prev => prev + digit.toString());
+  };
+
+  const sendPinEnter = () => {
+    sendKey(66); // KEYCODE_ENTER
+    setPinInput('');
+  };
+
+  const clearPinDigit = () => {
+    sendKey(67); // KEYCODE_DEL
+    setPinInput(prev => prev.slice(0, -1));
   };
 
   const toggleFullscreen = () => {
@@ -219,8 +272,10 @@ function DeviceScreen() {
               className="screen-image"
               alt="Device screen"
               draggable={false}
-              onMouseDown={handleMouseDown}
-              onMouseUp={handleMouseUp}
+              style={{ touchAction: 'none' }}
+              onPointerDown={handlePointerDown}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerCancel}
               onContextMenu={e => e.preventDefault()}
             />
             {!streaming && (
@@ -262,6 +317,14 @@ function DeviceScreen() {
                 <Power size={18} />
                 <span>Power</span>
               </button>
+              <button className="ctrl-btn" onClick={() => sendKey(223)} title="Lock Screen">
+                <Lock size={18} />
+                <span>Lock</span>
+              </button>
+              <button className="ctrl-btn" onClick={() => sendKey(164)} title="Mute">
+                <VolumeX size={18} />
+                <span>Mute</span>
+              </button>
             </div>
           </div>
 
@@ -280,7 +343,7 @@ function DeviceScreen() {
           </div>
 
           <div className="control-section">
-            <h4>Scroll</h4>
+            <h4>Scroll / Swipe</h4>
             <div className="control-buttons">
               <button className="ctrl-btn" onClick={() => sendAction('swipe', { x1: screenInfo.width / 2, y1: screenInfo.height * 0.7, x2: screenInfo.width / 2, y2: screenInfo.height * 0.3, durationMs: 300 })} title="Scroll Up">
                 <ChevronUp size={18} />
@@ -289,6 +352,52 @@ function DeviceScreen() {
               <button className="ctrl-btn" onClick={() => sendAction('swipe', { x1: screenInfo.width / 2, y1: screenInfo.height * 0.3, x2: screenInfo.width / 2, y2: screenInfo.height * 0.7, durationMs: 300 })} title="Scroll Down">
                 <ChevronDown size={18} />
                 <span>Down</span>
+              </button>
+              <button className="ctrl-btn" onClick={() => sendAction('swipe', { x1: screenInfo.width * 0.8, y1: screenInfo.height / 2, x2: screenInfo.width * 0.2, y2: screenInfo.height / 2, durationMs: 300 })} title="Swipe Left">
+                <ChevronLeft size={18} />
+                <span>Left</span>
+              </button>
+              <button className="ctrl-btn" onClick={() => sendAction('swipe', { x1: screenInfo.width * 0.2, y1: screenInfo.height / 2, x2: screenInfo.width * 0.8, y2: screenInfo.height / 2, durationMs: 300 })} title="Swipe Right">
+                <ChevronRight size={18} />
+                <span>Right</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="control-section">
+            <h4>More Controls</h4>
+            <div className="control-buttons">
+              <button className="ctrl-btn" onClick={() => sendKey(220)} title="Brightness Down">
+                <Sun size={18} />
+                <span>Bright -</span>
+              </button>
+              <button className="ctrl-btn" onClick={() => sendKey(221)} title="Brightness Up">
+                <Sun size={18} />
+                <span>Bright +</span>
+              </button>
+              <button className="ctrl-btn" onClick={() => sendKey(120)} title="Take Screenshot">
+                <Camera size={18} />
+                <span>Screenshot</span>
+              </button>
+              <button className="ctrl-btn" onClick={() => sendKey(84)} title="Search">
+                <Search size={18} />
+                <span>Search</span>
+              </button>
+              <button className="ctrl-btn" onClick={() => sendAction('swipe', { x1: screenInfo.width / 2, y1: 0, x2: screenInfo.width / 2, y2: screenInfo.height * 0.3, durationMs: 300 })} title="Notifications">
+                <Bell size={18} />
+                <span>Notifs</span>
+              </button>
+              <button className="ctrl-btn" onClick={() => sendAction('swipe', { x1: screenInfo.width / 2, y1: 0, x2: screenInfo.width / 2, y2: screenInfo.height * 0.6, durationMs: 400 })} title="Quick Settings">
+                <Settings size={18} />
+                <span>Quick Set</span>
+              </button>
+              <button className="ctrl-btn" onClick={() => { sendKey(3); setTimeout(() => sendKey(3), 200); }} title="App Switch (Double Home)">
+                <Clipboard size={18} />
+                <span>App Switch</span>
+              </button>
+              <button className="ctrl-btn" onClick={() => sendKey(280)} title="Rotate Screen">
+                <RotateCw size={18} />
+                <span>Rotate</span>
               </button>
             </div>
           </div>
@@ -327,7 +436,28 @@ function DeviceScreen() {
               <button className="ctrl-btn small" onClick={() => sendKey(62)} title="Space">Space</button>
               <button className="ctrl-btn small" onClick={() => sendKey(111)} title="Escape">Esc</button>
               <button className="ctrl-btn small" onClick={() => sendKey(82)} title="Menu">Menu</button>
+              <button className="ctrl-btn small" onClick={() => sendKey(112)} title="Delete Forward">FwdDel</button>
+              <button className="ctrl-btn small" onClick={() => sendKey(122)} title="Move Home">MvHome</button>
+              <button className="ctrl-btn small" onClick={() => sendKey(123)} title="Move End">MvEnd</button>
             </div>
+          </div>
+
+          <div className="control-section">
+            <h4>PIN / Password Unlock</h4>
+            <div style={{ marginBottom: 8, padding: '8px 12px', background: 'var(--bg-surface)', borderRadius: 8, fontFamily: 'monospace', fontSize: 18, textAlign: 'center', letterSpacing: 4, minHeight: 32, color: 'var(--text-primary)' }}>
+              {pinInput ? '*'.repeat(pinInput.length) : <span style={{ color: 'var(--text-muted)', fontSize: 12, letterSpacing: 0 }}>Enter PIN/Password</span>}
+            </div>
+            <div className="pin-pad">
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(d => (
+                <button key={d} className="pin-btn" onClick={() => sendPinDigit(d)}>{d}</button>
+              ))}
+              <button className="pin-btn pin-del" onClick={clearPinDigit}><Trash2 size={16} /> Del</button>
+              <button className="pin-btn" onClick={() => sendPinDigit(0)}>0</button>
+              <button className="pin-btn pin-del" onClick={() => { setPinInput(''); }} title="Clear All">Clr</button>
+            </div>
+            <button className="pin-btn pin-enter" onClick={sendPinEnter}>
+              <Unlock size={16} /> Enter / Unlock
+            </button>
           </div>
         </div>
       </div>
