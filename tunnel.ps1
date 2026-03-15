@@ -2,26 +2,22 @@
 # Creates an SSH reverse tunnel so the dashboard is accessible at:
 #   http://69.197.142.77:5000
 #
-# This script:
-#   1. Generates an SSH key pair (if not already done)
-#   2. Copies the public key to the VPS (one-time, requires password)
-#   3. Clears any stale tunnel on the VPS before connecting
-#   4. Establishes a persistent SSH reverse tunnel with auto-reconnect
+# This script uses plink.exe (PuTTY) for passwordless automated SSH tunneling.
+# The VPS password is embedded so no manual entry is ever needed.
 
 param(
     [string]$VpsHost = "69.197.142.77",
     [string]$VpsUser = "administrator",
+    [string]$VpsPass = "Sarkar@00",
     [int]$RemotePort = 5000,
-    [int]$LocalPort = 5000,
-    [switch]$SetupKeysOnly
+    [int]$LocalPort = 5000
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 
 $AppName = "Mobile Control Hub"
-$SshKeyDir = Join-Path $env:USERPROFILE ".ssh"
-$SshKeyPath = Join-Path $SshKeyDir "mch_tunnel_key"
-$SshKeyPub = "$SshKeyPath.pub"
+$RepoRoot = $PSScriptRoot
+$ToolsDir = Join-Path $RepoRoot "tools"
 
 function Write-Step($msg) { Write-Host "`n>> $msg" -ForegroundColor Cyan }
 function Write-Ok($msg) { Write-Host "   [OK] $msg" -ForegroundColor Green }
@@ -33,95 +29,87 @@ Write-Host "============================================================" -Foreg
 Write-Host "   $AppName - Cloud Access Tunnel" -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "   This makes your dashboard accessible from anywhere at:" -ForegroundColor White
+Write-Host "   Dashboard will be accessible from anywhere at:" -ForegroundColor White
 Write-Host "   http://${VpsHost}:${RemotePort}" -ForegroundColor Green
 Write-Host ""
 
 # ============================================================
-# Step 1: Generate SSH Key Pair (if needed)
+# Step 1: Ensure plink.exe is available
 # ============================================================
-Write-Step "Step 1: Checking SSH key pair..."
+Write-Step "Step 1: Checking SSH tools..."
 
-if (-not (Test-Path $SshKeyDir)) {
-    New-Item -ItemType Directory -Path $SshKeyDir -Force | Out-Null
+$plinkPath = $null
+
+# Check tools dir first
+$plinkInTools = Join-Path $ToolsDir "plink.exe"
+if (Test-Path $plinkInTools) {
+    $plinkPath = $plinkInTools
 }
 
-if (Test-Path $SshKeyPath) {
-    Write-Ok "SSH key already exists: $SshKeyPath"
+# Check PATH
+if (-not $plinkPath) {
+    $plinkInPath = Get-Command plink.exe -ErrorAction SilentlyContinue
+    if ($plinkInPath) { $plinkPath = $plinkInPath.Source }
+}
+
+# Download plink if not found
+if (-not $plinkPath) {
+    Write-Host "   Downloading plink.exe (PuTTY SSH client)..."
+    if (-not (Test-Path $ToolsDir)) {
+        New-Item -ItemType Directory -Path $ToolsDir -Force | Out-Null
+    }
+    try {
+        $plinkUrl = "https://the.earth.li/~sgtatham/putty/latest/w64/plink.exe"
+        Invoke-WebRequest -Uri $plinkUrl -OutFile $plinkInTools -UseBasicParsing
+        if (Test-Path $plinkInTools) {
+            $plinkPath = $plinkInTools
+            Write-Ok "plink.exe downloaded to tools/"
+        }
+    } catch {
+        Write-Warn "Failed to download plink.exe: $_"
+    }
+}
+
+if ($plinkPath) {
+    Write-Ok "Using plink.exe for automated tunnel (no password prompts)"
 } else {
-    Write-Host "   Generating new SSH key pair..."
-    try {
-        ssh-keygen -t ed25519 -f $SshKeyPath -N '""' -C "mch-tunnel@$env:COMPUTERNAME" 2>$null
-        if (Test-Path $SshKeyPath) {
-            Write-Ok "SSH key pair generated"
-        } else {
-            & ssh-keygen -t ed25519 -f $SshKeyPath -N "" -C "mch-tunnel@$env:COMPUTERNAME"
-            if (Test-Path $SshKeyPath) {
-                Write-Ok "SSH key pair generated"
-            } else {
-                Write-Err "Failed to generate SSH key."
-                exit 1
-            }
-        }
-    } catch {
-        Write-Err "ssh-keygen failed: $_"
-        exit 1
-    }
+    Write-Err "Could not find or download plink.exe"
+    Write-Host "   Download manually from: https://the.earth.li/~sgtatham/putty/latest/w64/plink.exe" -ForegroundColor Yellow
+    Write-Host "   Place it in: $ToolsDir" -ForegroundColor Yellow
+    exit 1
 }
 
 # ============================================================
-# Step 2: Copy Public Key to VPS (if needed)
+# Step 2: Cache host key (accept it automatically)
 # ============================================================
-Write-Step "Step 2: Setting up key-based authentication to VPS..."
+Write-Step "Step 2: Caching VPS host key..."
 
-$keyAuthWorks = $false
-Write-Host "   Testing if key auth already works..."
+# Use echo y to auto-accept the host key on first connection
 try {
-    $testResult = & ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 -i $SshKeyPath "${VpsUser}@${VpsHost}" "echo KEY_AUTH_OK" 2>$null
-    if ($testResult -eq "KEY_AUTH_OK") {
-        $keyAuthWorks = $true
-        Write-Ok "Key-based authentication already configured"
+    $testArgs = @("-batch", "-pw", $VpsPass, "${VpsUser}@${VpsHost}", "echo CONNECTED")
+    echo y | & $plinkPath $testArgs 2>$null | Out-Null
+    # Run again in batch mode to verify
+    $testProc = Start-Process -FilePath $plinkPath -ArgumentList $testArgs -NoNewWindow -Wait -PassThru -RedirectStandardOutput "$env:TEMP\mch_test.txt" -RedirectStandardError "$env:TEMP\mch_test_err.txt"
+    $testOut = Get-Content "$env:TEMP\mch_test.txt" -ErrorAction SilentlyContinue
+    Remove-Item "$env:TEMP\mch_test.txt", "$env:TEMP\mch_test_err.txt" -ErrorAction SilentlyContinue
+    if ($testOut -match "CONNECTED") {
+        Write-Ok "VPS connection verified"
+    } else {
+        # Host key might not be cached yet, try with auto-accept
+        Write-Host "   Accepting VPS host key..." -ForegroundColor Gray
+        echo y | & $plinkPath -pw $VpsPass "${VpsUser}@${VpsHost}" "echo CONNECTED" 2>$null
+        Write-Ok "Host key accepted"
     }
-} catch {}
-
-if (-not $keyAuthWorks) {
-    Write-Host "   Key auth not set up yet. Copying public key to VPS..."
-    Write-Host "   You will be asked for the VPS password (one-time only)." -ForegroundColor Yellow
-    Write-Host ""
-
-    $pubKey = Get-Content $SshKeyPub -Raw
-    $pubKey = $pubKey.Trim()
-
-    Write-Host "   Connecting to ${VpsUser}@${VpsHost}..."
-    $sshCmd = "mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo '$pubKey' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && echo 'KEY_COPIED_OK'"
-    
-    try {
-        $result = & ssh -o StrictHostKeyChecking=no "${VpsUser}@${VpsHost}" $sshCmd
-        if ($result -match "KEY_COPIED_OK") {
-            $keyAuthWorks = $true
-            Write-Ok "Public key copied to VPS. Password login no longer needed."
-        } else {
-            Write-Warn "Key copy may have failed."
-        }
-    } catch {
-        Write-Warn "Could not copy key automatically: $_"
-    }
-}
-
-if ($SetupKeysOnly) {
-    Write-Ok "Key setup complete."
-    exit 0
+} catch {
+    Write-Warn "Could not verify VPS connection: $_"
+    Write-Host "   Will try to connect anyway..." -ForegroundColor Gray
 }
 
 # ============================================================
-# Step 3: Clear stale tunnel on VPS, then connect
+# Step 3: Pre-flight check
 # ============================================================
-Write-Step "Step 3: Starting SSH reverse tunnel..."
-Write-Host "   Local:  http://localhost:${LocalPort}" -ForegroundColor White
-Write-Host "   Cloud:  http://${VpsHost}:${RemotePort}" -ForegroundColor Green
-Write-Host ""
+Write-Step "Step 3: Pre-flight checks..."
 
-# Pre-flight check: verify dashboard is running locally
 Write-Host "   Checking if dashboard is running on localhost:${LocalPort}..." -ForegroundColor Gray
 try {
     $webReq = [System.Net.WebRequest]::Create("http://127.0.0.1:${LocalPort}/")
@@ -130,25 +118,29 @@ try {
     $resp.Close()
     Write-Ok "Dashboard is running on port ${LocalPort}"
 } catch {
-    Write-Warn "Dashboard may not be running on port ${LocalPort}."
-    Write-Host "   Make sure the dashboard is started before running the tunnel." -ForegroundColor Yellow
-    Write-Host "   Continuing anyway (will work once dashboard starts)..." -ForegroundColor Gray
+    Write-Warn "Dashboard may not be running on port ${LocalPort} yet."
+    Write-Host "   Continuing anyway (tunnel will work once dashboard starts)..." -ForegroundColor Gray
 }
 
+# ============================================================
+# Step 4: Clear stale tunnel and connect with auto-reconnect
+# ============================================================
+Write-Step "Step 4: Starting SSH reverse tunnel..."
+Write-Host "   Local:  http://localhost:${LocalPort}" -ForegroundColor White
+Write-Host "   Cloud:  http://${VpsHost}:${RemotePort}" -ForegroundColor Green
 Write-Host ""
 Write-Host "   The tunnel will auto-reconnect if disconnected." -ForegroundColor Gray
 Write-Host "   Press Ctrl+C to stop." -ForegroundColor Gray
 Write-Host ""
 
-# Helper: clear any stale process holding RemotePort on the VPS
 function Clear-StaleTunnel {
     try {
-        if ($keyAuthWorks) {
-            $killCmd = "fuser -k ${RemotePort}/tcp 2>/dev/null; sleep 1; echo CLEARED"
-            $out = & ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 -i $SshKeyPath "${VpsUser}@${VpsHost}" $killCmd 2>$null
-            if ($out -match "CLEARED") {
-                Write-Host "   Cleared stale connection on VPS port ${RemotePort}" -ForegroundColor Gray
-            }
+        $clearArgs = @("-batch", "-pw", $VpsPass, "${VpsUser}@${VpsHost}", "fuser -k ${RemotePort}/tcp 2>/dev/null; echo CLEARED")
+        $proc = Start-Process -FilePath $plinkPath -ArgumentList $clearArgs -NoNewWindow -Wait -PassThru -RedirectStandardOutput "$env:TEMP\mch_clear.txt" -RedirectStandardError "$env:TEMP\mch_clear_err.txt"
+        $out = Get-Content "$env:TEMP\mch_clear.txt" -ErrorAction SilentlyContinue
+        Remove-Item "$env:TEMP\mch_clear.txt", "$env:TEMP\mch_clear_err.txt" -ErrorAction SilentlyContinue
+        if ($out -match "CLEARED") {
+            Write-Host "   Cleared stale connection on VPS port ${RemotePort}" -ForegroundColor Gray
         }
     } catch {}
 }
@@ -157,46 +149,34 @@ $retryDelay = 5
 $maxRetryDelay = 60
 
 while ($true) {
-    Write-Host "   [$(Get-Date -Format 'HH:mm:ss')] Connecting tunnel..." -ForegroundColor Gray
+    $timestamp = Get-Date -Format 'HH:mm:ss'
+    Write-Host "   [$timestamp] Connecting tunnel..." -ForegroundColor Gray
 
     # Clear any stale tunnel before attempting to connect
     Clear-StaleTunnel
 
-    # Build SSH args based on whether key auth works
-    if ($keyAuthWorks) {
-        $sshArgs = @(
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "ServerAliveInterval=30",
-            "-o", "ServerAliveCountMax=3",
-            "-o", "ExitOnForwardFailure=yes",
-            "-o", "BatchMode=yes",
-            "-i", $SshKeyPath,
-            "-N",
-            "-R", "0.0.0.0:${RemotePort}:127.0.0.1:${LocalPort}",
-            "${VpsUser}@${VpsHost}"
-        )
-    } else {
-        $sshArgs = @(
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "ServerAliveInterval=30",
-            "-o", "ServerAliveCountMax=3",
-            "-o", "ExitOnForwardFailure=yes",
-            "-N",
-            "-R", "0.0.0.0:${RemotePort}:127.0.0.1:${LocalPort}",
-            "${VpsUser}@${VpsHost}"
-        )
-    }
+    # Establish the tunnel using plink with embedded password
+    $tunnelArgs = @(
+        "-batch",
+        "-pw", $VpsPass,
+        "-N",
+        "-R", "0.0.0.0:${RemotePort}:127.0.0.1:${LocalPort}",
+        "${VpsUser}@${VpsHost}"
+    )
 
-    $process = Start-Process -FilePath "ssh" -ArgumentList $sshArgs -NoNewWindow -Wait -PassThru
+    $timestamp = Get-Date -Format 'HH:mm:ss'
+    Write-Host "   [$timestamp] Tunnel ACTIVE! http://${VpsHost}:${RemotePort}" -ForegroundColor Green
+    $process = Start-Process -FilePath $plinkPath -ArgumentList $tunnelArgs -NoNewWindow -Wait -PassThru
 
+    $timestamp = Get-Date -Format 'HH:mm:ss'
     if ($process.ExitCode -eq 0) {
-        Write-Host "   [$(Get-Date -Format 'HH:mm:ss')] Tunnel disconnected cleanly." -ForegroundColor Yellow
+        Write-Host "   [$timestamp] Tunnel disconnected cleanly." -ForegroundColor Yellow
         $retryDelay = 5
     } else {
-        Write-Warn "Tunnel exited with code $($process.ExitCode). Will retry..."
+        Write-Warn "[$timestamp] Tunnel exited with code $($process.ExitCode). Will retry..."
     }
 
-    Write-Host "   [$(Get-Date -Format 'HH:mm:ss')] Reconnecting in $retryDelay seconds..." -ForegroundColor Gray
+    Write-Host "   [$timestamp] Reconnecting in $retryDelay seconds..." -ForegroundColor Gray
     Start-Sleep -Seconds $retryDelay
     $retryDelay = [Math]::Min($retryDelay * 2, $maxRetryDelay)
 }

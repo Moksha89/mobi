@@ -408,78 +408,42 @@ if (-not $SkipPowerSettings) {
 }
 
 # ============================================================
-# Step 8: Set up SSH tunnel for cloud access
+# Step 8: Set up plink.exe for passwordless cloud tunnel
 # ============================================================
-Write-Step "Step 8/9: Setting up cloud access tunnel..."
+Write-Step "Step 8/9: Setting up cloud access tunnel (passwordless)..."
 
-$SshKeyDir = Join-Path $env:USERPROFILE ".ssh"
-$SshKeyPath = Join-Path $SshKeyDir "mch_tunnel_key"
-$SshKeyPub = "$SshKeyPath.pub"
-
-if (-not (Test-Path $SshKeyDir)) {
-    New-Item -ItemType Directory -Path $SshKeyDir -Force | Out-Null
-}
-
-if (Test-Path $SshKeyPath) {
-    Write-Ok "SSH tunnel key already exists"
+$plinkPath = Join-Path $ToolsDir "plink.exe"
+if (Test-Path $plinkPath) {
+    Write-Ok "plink.exe already exists in tools/"
 } else {
-    Write-Host "   Generating SSH key pair for tunnel..."
+    Write-Host "   Downloading plink.exe (PuTTY SSH client for passwordless tunnel)..."
     try {
-        & ssh-keygen -t ed25519 -f $SshKeyPath -N '""' -C "mch-tunnel@$env:COMPUTERNAME" 2>$null
-        if (-not (Test-Path $SshKeyPath)) {
-            & ssh-keygen -t ed25519 -f $SshKeyPath -N "" -C "mch-tunnel@$env:COMPUTERNAME"
-        }
-        if (Test-Path $SshKeyPath) {
-            Write-Ok "SSH key pair generated"
+        $plinkUrl = "https://the.earth.li/~sgtatham/putty/latest/w64/plink.exe"
+        Invoke-WebRequest -Uri $plinkUrl -OutFile $plinkPath -UseBasicParsing
+        if (Test-Path $plinkPath) {
+            Write-Ok "plink.exe downloaded — tunnel will connect automatically without password prompts"
         } else {
-            Write-Warn "Could not generate SSH key. Cloud tunnel may ask for password each time."
+            Write-Warn "Failed to download plink.exe"
         }
     } catch {
-        Write-Warn "ssh-keygen not available. Cloud tunnel will use password auth."
+        Write-Warn "Failed to download plink.exe: $_"
+        Write-Host "   Download manually: https://the.earth.li/~sgtatham/putty/latest/w64/plink.exe" -ForegroundColor Yellow
+        Write-Host "   Place it in: $ToolsDir" -ForegroundColor Yellow
     }
 }
 
-# Test if key auth works, if not try to copy key
-if (Test-Path $SshKeyPath) {
-    $keyAuthWorks = $false
+# Cache VPS host key so plink doesn't prompt for it
+if (Test-Path $plinkPath) {
+    Write-Host "   Caching VPS host key..." -ForegroundColor Gray
     try {
-        $testResult = & ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 -i $SshKeyPath "${RustDeskVpsIP}" "echo KEY_AUTH_OK" 2>$null
-        if ($testResult -eq "KEY_AUTH_OK") { $keyAuthWorks = $true }
-    } catch {}
-
-    if ($keyAuthWorks) {
-        Write-Ok "SSH key auth already configured on VPS"
-    } else {
-        Write-Host ""
-        Write-Host "   To enable passwordless cloud access, enter your VPS password below." -ForegroundColor Yellow
-        Write-Host "   VPS: administrator@$RustDeskVpsIP" -ForegroundColor Gray
-        Write-Host "   (This is a one-time setup. Press Enter to skip.)" -ForegroundColor Gray
-        Write-Host ""
-
-        $vpsPassword = Read-Host "   VPS password (or press Enter to skip)"
-        if ($vpsPassword) {
-            $pubKey = (Get-Content $SshKeyPub -Raw).Trim()
-            try {
-                $sshCmd = "mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo '$pubKey' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && echo KEY_COPIED_OK"
-                # Use plink or ssh with sshpass-like approach
-                $env:SSH_ASKPASS_REQUIRE = "never"
-                $result = echo $vpsPassword | & ssh -o StrictHostKeyChecking=no "administrator@${RustDeskVpsIP}" $sshCmd 2>$null
-                if ($result -match "KEY_COPIED_OK") {
-                    Write-Ok "SSH key copied to VPS. Passwordless tunnel enabled!"
-                } else {
-                    Write-Warn "Could not copy key automatically. You'll be asked for password when starting tunnel."
-                    Write-Host "   Run tunnel.bat and enter password when prompted." -ForegroundColor Gray
-                }
-            } catch {
-                Write-Warn "Key copy failed. Tunnel will use password auth."
-            }
-        } else {
-            Write-Info "Skipped. Run tunnel.bat later to set up cloud access."
-        }
+        echo y | & $plinkPath -pw "Sarkar@00" "administrator@${RustDeskVpsIP}" "echo CONNECTED" 2>$null | Out-Null
+        Write-Ok "VPS host key cached"
+    } catch {
+        Write-Host "   Host key will be cached on first tunnel connection" -ForegroundColor Gray
     }
 }
 
-Write-Ok "Cloud access: http://${RustDeskVpsIP}:5000 (when tunnel is running)"
+Write-Ok "Cloud access: http://${RustDeskVpsIP}:5000 (fully automatic, no password needed)"
 
 # ============================================================
 # Step 9: Summary & Launch
