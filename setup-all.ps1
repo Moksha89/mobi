@@ -8,7 +8,8 @@
 #   6. Builds the application
 #   7. Adds Windows Firewall rule for port 5000
 #   8. Disables sleep/hibernate so PC stays on
-#   9. Launches everything (dashboard + RustDesk)
+#   9. Sets up SSH tunnel for cloud access
+#  10. Launches everything (dashboard + RustDesk + tunnel)
 #
 # Usage: Right-click setup-all.bat > "Run as administrator"
 #   or:  powershell -ExecutionPolicy Bypass -File setup-all.ps1
@@ -55,7 +56,8 @@ Write-Host "    4. RustDesk client     (remote access from anywhere)" -Foregroun
 Write-Host "    5. Build the app       (compile the web dashboard)" -ForegroundColor Gray
 Write-Host "    6. Firewall rule       (allow network access on port 5000)" -ForegroundColor Gray
 Write-Host "    7. Power settings      (prevent PC from sleeping)" -ForegroundColor Gray
-Write-Host "    8. Launch everything   (dashboard + RustDesk)" -ForegroundColor Gray
+Write-Host "    8. Cloud tunnel        (access dashboard from anywhere)" -ForegroundColor Gray
+Write-Host "    9. Launch everything   (dashboard + RustDesk + tunnel)" -ForegroundColor Gray
 Write-Host ""
 
 # Check if running as admin (needed for firewall and power settings)
@@ -70,7 +72,7 @@ if (-not $isAdmin) {
 # Step 1: Check/Install .NET 8 SDK
 # ============================================================
 if (-not $SkipDotNet) {
-    Write-Step "Step 1/8: Checking .NET 8 SDK..."
+    Write-Step "Step 1/9: Checking .NET 8 SDK..."
 
     $dotnetVersion = $null
     try {
@@ -110,14 +112,14 @@ if (-not $SkipDotNet) {
         }
     }
 } else {
-    Write-Step "Step 1/8: Skipping .NET SDK check (-SkipDotNet)"
+    Write-Step "Step 1/9: Skipping .NET SDK check (-SkipDotNet)"
 }
 
 # ============================================================
 # Step 2: Download ADB Platform Tools
 # ============================================================
 if (-not $SkipTools) {
-    Write-Step "Step 2/8: Setting up ADB (Android Debug Bridge)..."
+    Write-Step "Step 2/9: Setting up ADB (Android Debug Bridge)..."
 
     if (-not (Test-Path $ToolsDir)) {
         New-Item -ItemType Directory -Path $ToolsDir -Force | Out-Null
@@ -162,7 +164,7 @@ if (-not $SkipTools) {
     # ============================================================
     # Step 3: Download scrcpy
     # ============================================================
-    Write-Step "Step 3/8: Setting up scrcpy (screen mirroring)..."
+    Write-Step "Step 3/9: Setting up scrcpy (screen mirroring)..."
 
     $scrcpyPath = Join-Path $ToolsDir "scrcpy.exe"
 
@@ -209,14 +211,14 @@ if (-not $SkipTools) {
         }
     }
 } else {
-    Write-Step "Steps 2-3/8: Skipping tool downloads (-SkipTools)"
+    Write-Step "Steps 2-3/9: Skipping tool downloads (-SkipTools)"
 }
 
 # ============================================================
 # Step 4: Download & Install RustDesk Client
 # ============================================================
 if (-not $SkipRustDesk) {
-    Write-Step "Step 4/8: Setting up RustDesk client (remote access)..."
+    Write-Step "Step 4/9: Setting up RustDesk client (remote access)..."
 
     # Check if RustDesk is already installed
     $rustDeskInstalled = $false
@@ -312,14 +314,14 @@ key = '$RustDeskPublicKey'
         Write-Info "Config saved to: $configFile"
     }
 } else {
-    Write-Step "Step 4/8: Skipping RustDesk setup (-SkipRustDesk)"
+    Write-Step "Step 4/9: Skipping RustDesk setup (-SkipRustDesk)"
 }
 
 # ============================================================
 # Step 5: Build the application
 # ============================================================
 if (-not $SkipBuild) {
-    Write-Step "Step 5/8: Building Mobile Control Hub..."
+    Write-Step "Step 5/9: Building Mobile Control Hub..."
 
     try {
         Write-Host "   Restoring NuGet packages..."
@@ -348,14 +350,14 @@ if (-not $SkipBuild) {
         exit 1
     }
 } else {
-    Write-Step "Step 5/8: Skipping build (-SkipBuild)"
+    Write-Step "Step 5/9: Skipping build (-SkipBuild)"
 }
 
 # ============================================================
 # Step 6: Add Windows Firewall rule for port 5000
 # ============================================================
 if (-not $SkipFirewall) {
-    Write-Step "Step 6/8: Configuring Windows Firewall..."
+    Write-Step "Step 6/9: Configuring Windows Firewall..."
 
     if ($isAdmin) {
         try {
@@ -379,14 +381,14 @@ if (-not $SkipFirewall) {
         Write-Warn "Skipping firewall (requires Administrator). Run as admin to enable."
     }
 } else {
-    Write-Step "Step 6/8: Skipping firewall config (-SkipFirewall)"
+    Write-Step "Step 6/9: Skipping firewall config (-SkipFirewall)"
 }
 
 # ============================================================
 # Step 7: Disable sleep/hibernate so PC stays on
 # ============================================================
 if (-not $SkipPowerSettings) {
-    Write-Step "Step 7/8: Configuring power settings (prevent sleep)..."
+    Write-Step "Step 7/9: Configuring power settings (prevent sleep)..."
 
     if ($isAdmin) {
         try {
@@ -402,11 +404,85 @@ if (-not $SkipPowerSettings) {
         Write-Warn "Skipping power settings (requires Administrator). Run as admin to enable."
     }
 } else {
-    Write-Step "Step 7/8: Skipping power settings (-SkipPowerSettings)"
+    Write-Step "Step 7/9: Skipping power settings (-SkipPowerSettings)"
 }
 
 # ============================================================
-# Step 8: Summary & Launch
+# Step 8: Set up SSH tunnel for cloud access
+# ============================================================
+Write-Step "Step 8/9: Setting up cloud access tunnel..."
+
+$SshKeyDir = Join-Path $env:USERPROFILE ".ssh"
+$SshKeyPath = Join-Path $SshKeyDir "mch_tunnel_key"
+$SshKeyPub = "$SshKeyPath.pub"
+
+if (-not (Test-Path $SshKeyDir)) {
+    New-Item -ItemType Directory -Path $SshKeyDir -Force | Out-Null
+}
+
+if (Test-Path $SshKeyPath) {
+    Write-Ok "SSH tunnel key already exists"
+} else {
+    Write-Host "   Generating SSH key pair for tunnel..."
+    try {
+        & ssh-keygen -t ed25519 -f $SshKeyPath -N '""' -C "mch-tunnel@$env:COMPUTERNAME" 2>$null
+        if (-not (Test-Path $SshKeyPath)) {
+            & ssh-keygen -t ed25519 -f $SshKeyPath -N "" -C "mch-tunnel@$env:COMPUTERNAME"
+        }
+        if (Test-Path $SshKeyPath) {
+            Write-Ok "SSH key pair generated"
+        } else {
+            Write-Warn "Could not generate SSH key. Cloud tunnel may ask for password each time."
+        }
+    } catch {
+        Write-Warn "ssh-keygen not available. Cloud tunnel will use password auth."
+    }
+}
+
+# Test if key auth works, if not try to copy key
+if (Test-Path $SshKeyPath) {
+    $keyAuthWorks = $false
+    try {
+        $testResult = & ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 -i $SshKeyPath "${RustDeskVpsIP}" "echo KEY_AUTH_OK" 2>$null
+        if ($testResult -eq "KEY_AUTH_OK") { $keyAuthWorks = $true }
+    } catch {}
+
+    if ($keyAuthWorks) {
+        Write-Ok "SSH key auth already configured on VPS"
+    } else {
+        Write-Host ""
+        Write-Host "   To enable passwordless cloud access, enter your VPS password below." -ForegroundColor Yellow
+        Write-Host "   VPS: administrator@$RustDeskVpsIP" -ForegroundColor Gray
+        Write-Host "   (This is a one-time setup. Press Enter to skip.)" -ForegroundColor Gray
+        Write-Host ""
+
+        $vpsPassword = Read-Host "   VPS password (or press Enter to skip)"
+        if ($vpsPassword) {
+            $pubKey = (Get-Content $SshKeyPub -Raw).Trim()
+            try {
+                $sshCmd = "mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo '$pubKey' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && echo KEY_COPIED_OK"
+                # Use plink or ssh with sshpass-like approach
+                $env:SSH_ASKPASS_REQUIRE = "never"
+                $result = echo $vpsPassword | & ssh -o StrictHostKeyChecking=no "administrator@${RustDeskVpsIP}" $sshCmd 2>$null
+                if ($result -match "KEY_COPIED_OK") {
+                    Write-Ok "SSH key copied to VPS. Passwordless tunnel enabled!"
+                } else {
+                    Write-Warn "Could not copy key automatically. You'll be asked for password when starting tunnel."
+                    Write-Host "   Run tunnel.bat and enter password when prompted." -ForegroundColor Gray
+                }
+            } catch {
+                Write-Warn "Key copy failed. Tunnel will use password auth."
+            }
+        } else {
+            Write-Info "Skipped. Run tunnel.bat later to set up cloud access."
+        }
+    }
+}
+
+Write-Ok "Cloud access: http://${RustDeskVpsIP}:5000 (when tunnel is running)"
+
+# ============================================================
+# Step 9: Summary & Launch
 # ============================================================
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Green
@@ -453,6 +529,7 @@ try {
     Write-Host "   LAN:     http://<your-pc-ip>:5000" -ForegroundColor White
 }
 
+Write-Host "   Cloud:   http://${RustDeskVpsIP}:5000 (run tunnel.bat or start.bat)" -ForegroundColor White
 Write-Host "   Remote:  Install RustDesk on any device, connect using your PC's RustDesk ID" -ForegroundColor White
 
 # Get RustDesk ID if possible
@@ -476,6 +553,16 @@ if (-not $NoLaunch) {
     $response = Read-Host "   Launch everything now? (y/n)"
     if ($response -eq 'y' -or $response -eq 'Y' -or $response -eq '') {
         
+        # Launch Cloud Tunnel
+        Write-Step "Launching Cloud Access Tunnel..."
+        $tunnelScript = Join-Path $RepoRoot "tunnel.ps1"
+        if (Test-Path $tunnelScript) {
+            Start-Process -FilePath "powershell" -ArgumentList "-ExecutionPolicy Bypass -File `"$tunnelScript`"" -WorkingDirectory $RepoRoot
+            Write-Ok "Cloud tunnel starting (http://${RustDeskVpsIP}:5000)"
+        } else {
+            Write-Warn "tunnel.ps1 not found. Cloud access not available."
+        }
+
         # Launch Web Dashboard
         Write-Step "Launching Web Dashboard..."
         Start-Process -FilePath "dotnet" -ArgumentList "run --project `"$RepoRoot\src\MobileControlHub.WebApi`"" -WorkingDirectory $RepoRoot
@@ -505,7 +592,8 @@ if (-not $NoLaunch) {
         Write-Host "   Everything is running!" -ForegroundColor Green
         Write-Host "============================================================" -ForegroundColor Green
         Write-Host ""
-        Write-Host "   Dashboard:  http://localhost:5000 (open in browser)" -ForegroundColor White
+        Write-Host "   Dashboard:  http://localhost:5000 (local)" -ForegroundColor White
+        Write-Host "   Cloud:      http://${RustDeskVpsIP}:5000 (from anywhere)" -ForegroundColor Green
         Write-Host "   RustDesk:   Running (check system tray for ID)" -ForegroundColor White
         Write-Host ""
         Write-Host "   To access from anywhere:" -ForegroundColor Yellow

@@ -1,15 +1,21 @@
 @echo off
 :: Mobile Control Hub - Quick Start
-:: Double-click this file to launch the web dashboard
-:: Make sure you've run setup.bat first!
+:: Double-click this file to launch the web dashboard + cloud tunnel
+:: Make sure you've run setup.bat or setup-all.bat first!
 
 echo.
 echo Starting Mobile Control Hub Web Dashboard...
 echo.
 echo The dashboard will be available at:
-echo   http://localhost:5000
+echo   Local:  http://localhost:5000
+echo   Cloud:  http://69.197.142.77:5000 (if tunnel is running)
 echo.
-echo Press Ctrl+C to stop the server.
+
+:: Start the cloud tunnel in a separate window
+echo Starting cloud access tunnel...
+start "MCH Cloud Tunnel" cmd /c "powershell -ExecutionPolicy Bypass -File "%~dp0tunnel.ps1""
+
+echo Starting web dashboard (press Ctrl+C to stop)...
 echo.
 
 dotnet run --project "%~dp0src\MobileControlHub.WebApi" --configuration Release
