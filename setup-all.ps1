@@ -1,4 +1,4 @@
-# Mobile Control Hub - Complete Setup Script for Windows
+﻿# Mobile Control Hub - Complete Setup Script for Windows
 # This script does EVERYTHING from start to finish:
 #   1. Installs .NET 8 SDK (if missing)
 #   2. Downloads ADB (Android Debug Bridge)
@@ -421,7 +421,7 @@ if (Test-Path $plinkPath) {
         $plinkUrl = "https://the.earth.li/~sgtatham/putty/latest/w64/plink.exe"
         Invoke-WebRequest -Uri $plinkUrl -OutFile $plinkPath -UseBasicParsing
         if (Test-Path $plinkPath) {
-            Write-Ok "plink.exe downloaded — tunnel will connect automatically without password prompts"
+            Write-Ok "plink.exe downloaded - tunnel will connect automatically without password prompts"
         } else {
             Write-Warn "Failed to download plink.exe"
         }
