@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Imaging;
 using Microsoft.AspNetCore.Mvc;
 using MobileControlHub.Domain.Interfaces;
 using MobileControlHub.Infrastructure.Helpers;
@@ -20,18 +22,26 @@ public class ScreenController : ControllerBase
     }
 
     /// <summary>
-    /// Get a live screenshot from the device as a JPEG image.
-    /// Uses 'adb exec-out screencap -p' for direct PNG capture via stdout,
-    /// avoiding the slower screencap-to-file-then-pull approach.
+    /// Get a live screenshot from the device.
+    /// Uses 'adb exec-out screencap -p' for direct PNG capture via stdout.
+    /// Supports JPEG compression via ?quality=N (1-100) and resolution scaling via ?scale=N (0.1-1.0)
+    /// for faster remote viewing over slow connections.
     /// </summary>
     [HttpGet]
-    public async Task<IActionResult> GetScreenshot(string serial, [FromQuery] int quality = 80, CancellationToken ct = default)
+    public async Task<IActionResult> GetScreenshot(
+        string serial,
+        [FromQuery] int quality = 80,
+        [FromQuery] double scale = 1.0,
+        CancellationToken ct = default)
     {
         var config = await _configService.LoadAsync(ct);
         var adbPath = config.AdbPath;
 
         if (!ProcessRunner.ExecutableExists(adbPath))
             return StatusCode(503, ApiResult.Fail("ADB not available"));
+
+        quality = Math.Clamp(quality, 1, 100);
+        scale = Math.Clamp(scale, 0.1, 1.0);
 
         try
         {
@@ -67,7 +77,42 @@ public class ScreenController : ControllerBase
             }
 
             ms.Position = 0;
-            return File(ms.ToArray(), "image/png");
+
+            // Convert PNG to JPEG with quality/scale for faster transfer
+            try
+            {
+                using var srcBitmap = new Bitmap(ms);
+                var targetWidth = (int)(srcBitmap.Width * scale);
+                var targetHeight = (int)(srcBitmap.Height * scale);
+
+                using var destBitmap = scale < 0.99
+                    ? new Bitmap(srcBitmap, targetWidth, targetHeight)
+                    : srcBitmap;
+
+                using var jpegStream = new MemoryStream();
+                var encoder = ImageCodecInfo.GetImageEncoders()
+                    .FirstOrDefault(e => e.FormatID == ImageFormat.Jpeg.Guid);
+                if (encoder != null)
+                {
+                    var encoderParams = new EncoderParameters(1);
+                    encoderParams.Param[0] = new EncoderParameter(Encoder.Quality, (long)quality);
+                    destBitmap.Save(jpegStream, encoder, encoderParams);
+                }
+                else
+                {
+                    destBitmap.Save(jpegStream, ImageFormat.Jpeg);
+                }
+
+                Response.Headers["X-Original-Size"] = ms.Length.ToString();
+                Response.Headers["X-Compressed-Size"] = jpegStream.Length.ToString();
+                return File(jpegStream.ToArray(), "image/jpeg");
+            }
+            catch
+            {
+                // Fallback to raw PNG if image conversion fails
+                ms.Position = 0;
+                return File(ms.ToArray(), "image/png");
+            }
         }
         catch (Exception ex)
         {

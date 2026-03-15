@@ -28,6 +28,9 @@ function DeviceScreen() {
   const [showTextInput, setShowTextInput] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [imgQuality, setImgQuality] = useState(50);
+  const [imgScale, setImgScale] = useState(0.5);
+  const [frameSize, setFrameSize] = useState(0);
 
   // Touch tracking refs to avoid stale closure issues
   const swipeStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
@@ -63,7 +66,7 @@ function DeviceScreen() {
         }
         fetchingRef.current = true;
         try {
-          const res = await fetch(`${API_BASE}/devices/${serial}/screen?_t=${Date.now()}`);
+          const res = await fetch(`${API_BASE}/devices/${serial}/screen?quality=${imgQuality}&scale=${imgScale}&_t=${Date.now()}`);
           if (!res.ok) {
             setError(`Screenshot failed (${res.status})`);
             await new Promise(r => setTimeout(r, 1000));
@@ -71,6 +74,7 @@ function DeviceScreen() {
             continue;
           }
           const blob = await res.blob();
+          setFrameSize(blob.size);
           if (imgRef.current && !cancelled) {
             const url = URL.createObjectURL(blob);
             const oldUrl = imgRef.current.src;
@@ -103,7 +107,7 @@ function DeviceScreen() {
       streamingRef.current = false;
       clearInterval(fpsInterval);
     };
-  }, [serial, streaming]);
+  }, [serial, streaming, imgQuality, imgScale]);
 
   // Map click coordinates on the displayed image to device coordinates
   const mapCoordinates = useCallback((clientX: number, clientY: number): { x: number; y: number } | null => {
@@ -288,6 +292,34 @@ function DeviceScreen() {
 
         {/* Control panel */}
         <div className="screen-controls">
+          <div className="control-section">
+            <h4>Stream Performance</h4>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+              {fps} FPS | {frameSize > 0 ? `${(frameSize / 1024).toFixed(0)} KB/frame` : '—'}
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between' }}>
+                <span>Quality</span><span>{imgQuality}%</span>
+              </label>
+              <input type="range" min={10} max={100} step={5} value={imgQuality}
+                onChange={e => setImgQuality(Number(e.target.value))}
+                style={{ width: '100%', accentColor: 'var(--accent)' }} />
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between' }}>
+                <span>Resolution</span><span>{Math.round(imgScale * 100)}%</span>
+              </label>
+              <input type="range" min={20} max={100} step={10} value={imgScale * 100}
+                onChange={e => setImgScale(Number(e.target.value) / 100)}
+                style={{ width: '100%', accentColor: 'var(--accent)' }} />
+            </div>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <button className="ctrl-btn small" style={{ flex: 1 }} onClick={() => { setImgQuality(30); setImgScale(0.3); }} title="Low quality, fastest">Fast</button>
+              <button className="ctrl-btn small" style={{ flex: 1 }} onClick={() => { setImgQuality(50); setImgScale(0.5); }} title="Balanced">Medium</button>
+              <button className="ctrl-btn small" style={{ flex: 1 }} onClick={() => { setImgQuality(85); setImgScale(1.0); }} title="High quality, slower">HD</button>
+            </div>
+          </div>
+
           <div className="control-section">
             <h4>Navigation</h4>
             <div className="control-buttons">
