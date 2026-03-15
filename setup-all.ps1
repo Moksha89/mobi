@@ -64,7 +64,7 @@ Write-Host ""
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
     Write-Warn "Not running as Administrator. Firewall and power settings may fail."
-    Write-Host "   For best results, right-click setup-all.bat > 'Run as administrator'" -ForegroundColor Gray
+    Write-Host '   For best results, right-click setup-all.bat -> Run as administrator' -ForegroundColor Gray
     Write-Host ""
 }
 
@@ -472,10 +472,10 @@ Write-Ok "RustDesk server  - $RustDeskVpsIP (pre-configured)"
 
 Write-Host ""
 Write-Host "   Phone Setup (do this for each Android phone):" -ForegroundColor Yellow
-Write-Host "   1. Settings > About Phone > tap 'Build Number' 7 times" -ForegroundColor White
-Write-Host "   2. Settings > Developer Options > enable 'USB Debugging'" -ForegroundColor White
-Write-Host "   3. Connect phone via USB cable" -ForegroundColor White
-Write-Host "   4. Tap 'Allow' on the USB debugging popup" -ForegroundColor White
+Write-Host '   1. Settings -> About Phone -> tap Build Number 7 times' -ForegroundColor White
+Write-Host '   2. Settings -> Developer Options -> enable USB Debugging' -ForegroundColor White
+Write-Host '   3. Connect phone via USB cable' -ForegroundColor White
+Write-Host '   4. Tap Allow on the USB debugging popup' -ForegroundColor White
 
 Write-Host ""
 Write-Host "   Access Points:" -ForegroundColor Yellow
@@ -490,18 +490,18 @@ try {
         Write-Host "   LAN:     http://${localIP}:5000" -ForegroundColor White
     }
 } catch {
-    Write-Host "   LAN:     http://<your-pc-ip>:5000" -ForegroundColor White
+    Write-Host '   LAN:     http://<your-pc-ip>:5000' -ForegroundColor White
 }
 
 Write-Host "   Cloud:   http://${RustDeskVpsIP}:5000 (run tunnel.bat or start.bat)" -ForegroundColor White
-Write-Host "   Remote:  Install RustDesk on any device, connect using your PC's RustDesk ID" -ForegroundColor White
+Write-Host '   Remote:  Install RustDesk on any device, connect using your PC RustDesk ID' -ForegroundColor White
 
 # Get RustDesk ID if possible
 try {
     $rustDeskIdFile = "$env:APPDATA\RustDesk\config\RustDesk.toml"
     if (Test-Path $rustDeskIdFile) {
         $content = Get-Content $rustDeskIdFile -Raw
-        if ($content -match "id\s*=\s*'(\d+)'") {
+        if ($content -match 'id\s*=\s*''(\d+)''') {
             $rustDeskId = $Matches[1]
             Write-Host ""
             Write-Host "   Your RustDesk ID: $rustDeskId" -ForegroundColor Green
@@ -569,7 +569,7 @@ if (-not $NoLaunch) {
     Write-Host "   RustDesk:   Running (check system tray for ID)" -ForegroundColor White
     Write-Host ""
     Write-Host "   IMPORTANT: Set a permanent password in RustDesk:" -ForegroundColor Red
-    Write-Host "   RustDesk > Settings > Security > Set permanent password" -ForegroundColor White
+    Write-Host '   RustDesk -> Settings -> Security -> Set permanent password' -ForegroundColor White
     Write-Host ""
 } else {
     Write-Host "   To launch, run: setup-all.bat" -ForegroundColor Yellow
