@@ -43,6 +43,22 @@ builder.Services.AddDirectoryBrowser();
 
 var app = builder.Build();
 
+// Resolve working directory to the solution/repo root so that relative tool paths
+// like "tools\adb.exe" resolve correctly (instead of relative to the WebApi project dir).
+var contentRoot = app.Environment.ContentRootPath;
+var candidateDir = new DirectoryInfo(contentRoot);
+while (candidateDir != null)
+{
+    var slnPath = Path.Combine(candidateDir.FullName, "MobileControlHub.sln");
+    var toolsPath = Path.Combine(candidateDir.FullName, "tools");
+    if (File.Exists(slnPath) || Directory.Exists(toolsPath))
+    {
+        Environment.CurrentDirectory = candidateDir.FullName;
+        break;
+    }
+    candidateDir = candidateDir.Parent;
+}
+
 // Initialize the database
 var dbManager = app.Services.GetRequiredService<DatabaseManager>();
 await dbManager.InitializeAsync();
