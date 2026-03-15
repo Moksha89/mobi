@@ -120,6 +120,22 @@ Write-Step "Step 3: Starting SSH reverse tunnel..."
 Write-Host "   Local:  http://localhost:${LocalPort}" -ForegroundColor White
 Write-Host "   Cloud:  http://${VpsHost}:${RemotePort}" -ForegroundColor Green
 Write-Host ""
+
+# Pre-flight check: verify dashboard is running locally
+Write-Host "   Checking if dashboard is running on localhost:${LocalPort}..." -ForegroundColor Gray
+try {
+    $webReq = [System.Net.WebRequest]::Create("http://127.0.0.1:${LocalPort}/")
+    $webReq.Timeout = 3000
+    $resp = $webReq.GetResponse()
+    $resp.Close()
+    Write-Ok "Dashboard is running on port ${LocalPort}"
+} catch {
+    Write-Warn "Dashboard may not be running on port ${LocalPort}."
+    Write-Host "   Make sure the dashboard is started before running the tunnel." -ForegroundColor Yellow
+    Write-Host "   Continuing anyway (will work once dashboard starts)..." -ForegroundColor Gray
+}
+
+Write-Host ""
 Write-Host "   The tunnel will auto-reconnect if disconnected." -ForegroundColor Gray
 Write-Host "   Press Ctrl+C to stop." -ForegroundColor Gray
 Write-Host ""
@@ -156,7 +172,7 @@ while ($true) {
             "-o", "BatchMode=yes",
             "-i", $SshKeyPath,
             "-N",
-            "-R", "0.0.0.0:${RemotePort}:localhost:${LocalPort}",
+            "-R", "0.0.0.0:${RemotePort}:127.0.0.1:${LocalPort}",
             "${VpsUser}@${VpsHost}"
         )
     } else {
@@ -166,7 +182,7 @@ while ($true) {
             "-o", "ServerAliveCountMax=3",
             "-o", "ExitOnForwardFailure=yes",
             "-N",
-            "-R", "0.0.0.0:${RemotePort}:localhost:${LocalPort}",
+            "-R", "0.0.0.0:${RemotePort}:127.0.0.1:${LocalPort}",
             "${VpsUser}@${VpsHost}"
         )
     }

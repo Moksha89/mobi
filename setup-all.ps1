@@ -573,16 +573,21 @@ if (-not $NoLaunch) {
         Write-Warn "tunnel.ps1 not found. Cloud access not available."
     }
 
-    # Launch RustDesk
+    # Launch RustDesk (only if not already running)
     if ($hasRustDesk) {
-        Write-Host "   Starting RustDesk..." -ForegroundColor White
-        $rdExe = $null
-        foreach ($p in $rustDeskExePaths) {
-            if (Test-Path $p) { $rdExe = $p; break }
-        }
-        if ($rdExe) {
-            Start-Process -FilePath $rdExe
-            Write-Ok "RustDesk started"
+        $rdRunning = Get-Process -Name "rustdesk" -ErrorAction SilentlyContinue
+        if ($rdRunning) {
+            Write-Ok "RustDesk is already running (skipping)"
+        } else {
+            Write-Host "   Starting RustDesk..." -ForegroundColor White
+            $rdExe = $null
+            foreach ($p in $rustDeskExePaths) {
+                if (Test-Path $p) { $rdExe = $p; break }
+            }
+            if ($rdExe) {
+                Start-Process -FilePath $rdExe
+                Write-Ok "RustDesk started"
+            }
         }
     }
 
