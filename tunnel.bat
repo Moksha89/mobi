@@ -3,12 +3,17 @@
 :: Makes the dashboard accessible from anywhere at:
 ::   http://69.197.142.77:5000
 ::
-:: First time: You'll be asked for the VPS password (one-time only)
-:: After that: Tunnel connects automatically using SSH keys
+:: Fully automatic - no password prompts
+
+cd /d "%~dp0"
 
 echo.
 echo Starting Cloud Access Tunnel...
 echo Your dashboard will be accessible at: http://69.197.142.77:5000
 echo.
 
-powershell -ExecutionPolicy Bypass -File "%~dp0tunnel.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tunnel.ps1"
+
+echo.
+echo    Tunnel stopped. Press any key to close...
+pause >nul

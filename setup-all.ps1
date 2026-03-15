@@ -24,7 +24,7 @@ param(
     [switch]$NoLaunch
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 $ProgressPreference = "SilentlyContinue"
 
 $AppName = "Mobile Control Hub"
