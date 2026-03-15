@@ -258,6 +258,12 @@ export const virtualDeviceActions = {
     fetchJson('/virtual-devices/connect', { method: 'POST', body: JSON.stringify({ host, port, friendlyName }) }),
   disconnect: (host: string, port: number) =>
     fetchJson('/virtual-devices/disconnect', { method: 'POST', body: JSON.stringify({ host, port }) }),
+  create: (name?: string, ramGB?: number, cpus?: number) =>
+    fetchJson('/virtual-devices/create', { method: 'POST', body: JSON.stringify({ name: name || '', ramGB: ramGB || 3, cpus: cpus || 2 }) }),
+  remove: (containerName: string) =>
+    fetchJson('/virtual-devices/remove', { method: 'POST', body: JSON.stringify({ containerName }) }),
+  restart: (containerName: string) =>
+    fetchJson('/virtual-devices/restart', { method: 'POST', body: JSON.stringify({ containerName }) }),
 };
 
 // Device action helpers

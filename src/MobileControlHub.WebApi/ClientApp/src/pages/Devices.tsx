@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDevices, deviceActions, sessionActions, virtualDeviceActions } from '../hooks/useApi';
 import { DeviceConnectionState } from '../types';
+import type { VirtualDeviceInfo } from '../types';
 import {
-  Smartphone, RefreshCw, Monitor, RotateCcw, Camera, Package,
-  Upload, Download, Power, Terminal, Copy, Search, AlertTriangle, Edit2, Eye, Cloud, CloudOff
+  Smartphone, RefreshCw, Monitor, RotateCcw, Camera,
+  Power, Copy, Search, AlertTriangle, Edit2, Eye, Cloud,
+  Plus, Trash2, RotateCw, Play, Square
 } from 'lucide-react';
 
 const stateLabel = (s: DeviceConnectionState) =>
@@ -38,6 +40,27 @@ function Devices() {
   const [editingName, setEditingName] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
   const [connectingCloud, setConnectingCloud] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createName, setCreateName] = useState('');
+  const [createRam, setCreateRam] = useState(3);
+  const [createCpus, setCreateCpus] = useState(2);
+  const [creating, setCreating] = useState(false);
+  const [removing, setRemoving] = useState<string | null>(null);
+  const [cloudDevices, setCloudDevices] = useState<VirtualDeviceInfo[]>([]);
+  const [showCloudPanel, setShowCloudPanel] = useState(true);
+
+  const loadCloudDevices = useCallback(async () => {
+    try {
+      const data = await virtualDeviceActions.getAll();
+      setCloudDevices(data);
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    loadCloudDevices();
+    const id = setInterval(loadCloudDevices, 8000);
+    return () => clearInterval(id);
+  }, [loadCloudDevices]);
 
   const filtered = devices.filter(d => {
     const q = search.toLowerCase();
@@ -63,6 +86,47 @@ function Devices() {
     setEditingName(null);
   };
 
+  const handleCreate = async () => {
+    setCreating(true);
+    try {
+      await virtualDeviceActions.create(createName || undefined, createRam, createCpus);
+      setActionMsg({ type: 'success', text: 'Cloud device created successfully' });
+      setTimeout(() => setActionMsg(null), 3000);
+      setShowCreateModal(false);
+      setCreateName('');
+      await loadCloudDevices();
+      await refreshDevices();
+    } catch (e) {
+      setActionMsg({ type: 'error', text: `Create failed: ${(e as Error).message}` });
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleRemove = async (containerName: string) => {
+    if (!confirm(`Remove cloud device "${containerName}"? This will delete the container and all its data.`)) return;
+    setRemoving(containerName);
+    try {
+      await virtualDeviceActions.remove(containerName);
+      setActionMsg({ type: 'success', text: `Removed ${containerName}` });
+      setTimeout(() => setActionMsg(null), 3000);
+      await loadCloudDevices();
+      await refreshDevices();
+    } catch (e) {
+      setActionMsg({ type: 'error', text: `Remove failed: ${(e as Error).message}` });
+    } finally {
+      setRemoving(null);
+    }
+  };
+
+  const handleRestart = async (containerName: string) => {
+    await doAction(`Restart ${containerName}`, async () => {
+      await virtualDeviceActions.restart(containerName);
+      await loadCloudDevices();
+      await refreshDevices();
+    });
+  };
+
   if (loading && devices.length === 0) {
     return <div className="loading-overlay"><div className="spinner" /> Loading devices...</div>;
   }
@@ -72,7 +136,7 @@ function Devices() {
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h2>Devices</h2>
-          <p>{devices.length} device(s) detected</p>
+          <p>{devices.length} device(s) detected | {cloudDevices.length} cloud container(s)</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-primary" onClick={async () => {
@@ -80,6 +144,7 @@ function Devices() {
             try {
               await virtualDeviceActions.connectAll();
               await refreshDevices();
+              await loadCloudDevices();
               setActionMsg({ type: 'success', text: 'Cloud devices connected' });
               setTimeout(() => setActionMsg(null), 3000);
             } catch (e) {
@@ -99,6 +164,157 @@ function Devices() {
       {error && <div className="alert alert-error"><AlertTriangle size={16} /> {error}</div>}
       {actionMsg && <div className={`alert alert-${actionMsg.type}`}>{actionMsg.text}</div>}
 
+      {/* Cloud Device Management Panel */}
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16, marginBottom: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: showCloudPanel ? 12 : 0 }}>
+          <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8, fontSize: 15 }}>
+            <Cloud size={18} style={{ color: '#a6e3a1' }} />
+            Cloud Devices (Virtual Android)
+            <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 'normal' }}>
+              {cloudDevices.length} container(s)
+            </span>
+          </h3>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-sm btn-success" onClick={() => setShowCreateModal(true)}>
+              <Plus size={12} /> Create Device
+            </button>
+            <button className="btn btn-sm btn-ghost" onClick={() => setShowCloudPanel(!showCloudPanel)}>
+              {showCloudPanel ? 'Collapse' : 'Expand'}
+            </button>
+          </div>
+        </div>
+
+        {showCloudPanel && (
+          cloudDevices.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-muted)' }}>
+              <Cloud size={32} style={{ opacity: 0.3, marginBottom: 8 }} />
+              <p style={{ margin: 0 }}>No cloud devices yet. Click "Create Device" to add a virtual Android.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+              {cloudDevices.map(cd => (
+                <div key={cd.containerName} style={{
+                  background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8,
+                  padding: 12, display: 'flex', flexDirection: 'column', gap: 8
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Cloud size={16} style={{ color: cd.connected ? '#a6e3a1' : '#666' }} />
+                      <strong style={{ fontSize: 13 }}>{cd.friendlyName}</strong>
+                    </div>
+                    <span className={`badge ${cd.connected ? 'online' : 'offline'}`} style={{ fontSize: 10 }}>
+                      <span className="badge-dot" />
+                      {cd.connected ? 'Online' : cd.containerStatus.includes('Up') ? 'Running' : 'Stopped'}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'grid', gridTemplateColumns: '80px 1fr', gap: '2px 8px' }}>
+                    <span>Container:</span><span style={{ fontFamily: 'monospace' }}>{cd.containerName}</span>
+                    <span>ADB Port:</span><span style={{ fontFamily: 'monospace' }}>{cd.port}</span>
+                    <span>Serial:</span><span style={{ fontFamily: 'monospace' }}>{cd.serial}</span>
+                    <span>Android:</span><span>{cd.androidVersion}</span>
+                    <span>Status:</span><span>{cd.containerStatus}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    {cd.connected ? (
+                      <button className="btn btn-sm btn-primary"
+                        onClick={() => navigate(`/devices/${cd.serial}/screen`)}
+                        title="View screen">
+                        <Eye size={10} /> View Screen
+                      </button>
+                    ) : (
+                      <button className="btn btn-sm btn-primary"
+                        onClick={async () => {
+                          await doAction('Connect', async () => {
+                            await virtualDeviceActions.connect('localhost', cd.port, cd.friendlyName);
+                            await loadCloudDevices();
+                            await refreshDevices();
+                          });
+                        }}>
+                        <Play size={10} /> Connect
+                      </button>
+                    )}
+                    <button className="btn btn-sm btn-ghost"
+                      onClick={() => handleRestart(cd.containerName)}
+                      title="Restart container">
+                      <RotateCw size={10} /> Restart
+                    </button>
+                    <button className="btn btn-sm btn-ghost"
+                      style={{ color: '#f38ba8' }}
+                      onClick={() => handleRemove(cd.containerName)}
+                      disabled={removing === cd.containerName}
+                      title="Remove container permanently">
+                      <Trash2 size={10} /> {removing === cd.containerName ? 'Removing...' : 'Remove'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        )}
+      </div>
+
+      {/* Create Cloud Device Modal */}
+      {showCreateModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000
+        }} onClick={() => !creating && setShowCreateModal(false)}>
+          <div style={{
+            background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12,
+            padding: 24, width: 400, maxWidth: '90vw'
+          }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Plus size={18} /> Create Cloud Android Device
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: 4, fontSize: 13 }}>Device Name (optional)</label>
+                <input
+                  value={createName}
+                  onChange={e => setCreateName(e.target.value)}
+                  placeholder="e.g., Mail Device, Social Media"
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13 }}>RAM (GB)</label>
+                  <select value={createRam} onChange={e => setCreateRam(Number(e.target.value))}
+                    style={{ width: '100%', padding: '8px 12px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)' }}>
+                    <option value={1}>1 GB</option>
+                    <option value={2}>2 GB</option>
+                    <option value={3}>3 GB</option>
+                    <option value={4}>4 GB</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13 }}>CPUs</label>
+                  <select value={createCpus} onChange={e => setCreateCpus(Number(e.target.value))}
+                    style={{ width: '100%', padding: '8px 12px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)' }}>
+                    <option value={1}>1 CPU</option>
+                    <option value={2}>2 CPUs</option>
+                    <option value={3}>3 CPUs</option>
+                    <option value={4}>4 CPUs</option>
+                  </select>
+                </div>
+              </div>
+              <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>
+                Each device runs Android 14 in a Docker container. The device will be available 24/7 and auto-restart on reboot.
+              </p>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button className="btn btn-ghost" onClick={() => setShowCreateModal(false)} disabled={creating}>
+                  Cancel
+                </button>
+                <button className="btn btn-success" onClick={handleCreate} disabled={creating}>
+                  {creating ? 'Creating...' : 'Create Device'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="filters-bar">
         <div style={{ position: 'relative', flex: 1, maxWidth: 400 }}>
           <Search size={16} style={{ position: 'absolute', left: 12, top: 10, color: 'var(--text-muted)' }} />
@@ -115,7 +331,7 @@ function Devices() {
         <div className="empty-state">
           <Smartphone size={48} />
           <h3>No devices found</h3>
-          <p>Connect Android phones via USB and enable USB Debugging</p>
+          <p>Click "Connect Cloud Devices" above or connect Android phones via USB</p>
         </div>
       ) : (
         <div className="device-grid">

@@ -147,6 +147,22 @@ public class VirtualDeviceInfo
     public bool Connected { get; set; }
     public string AndroidVersion { get; set; } = string.Empty;
     public string Model { get; set; } = string.Empty;
+    public string ContainerName { get; set; } = string.Empty;
+    public string ContainerStatus { get; set; } = string.Empty;
+}
+
+/// <summary>Request to create a new virtual Android device.</summary>
+public class CreateVirtualDeviceRequest
+{
+    public string Name { get; set; } = string.Empty;
+    public int RamGB { get; set; } = 3;
+    public int Cpus { get; set; } = 2;
+}
+
+/// <summary>Request to remove a virtual Android device.</summary>
+public class RemoveVirtualDeviceRequest
+{
+    public string ContainerName { get; set; } = string.Empty;
 }
 
 /// <summary>Generic API result wrapper.</summary>

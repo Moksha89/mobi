@@ -25,6 +25,8 @@ export interface VirtualDeviceInfo {
   connected: boolean;
   androidVersion: string;
   model: string;
+  containerName: string;
+  containerStatus: string;
 }
 
 export enum DeviceConnectionState {
