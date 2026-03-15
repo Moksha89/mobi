@@ -49,6 +49,16 @@ public class ConfigurationService : IConfigurationService
                 _cachedConfig = new AppConfiguration();
             }
 
+            // Ensure VPS defaults are populated if host is empty (e.g., from older config)
+            if (string.IsNullOrEmpty(_cachedConfig.VpsConfig.Host))
+            {
+                var defaults = new VpsConfiguration();
+                _cachedConfig.VpsConfig.Host = defaults.Host;
+                _cachedConfig.VpsConfig.RustDeskRelayServer = defaults.RustDeskRelayServer;
+                _cachedConfig.VpsConfig.RustDeskIdServer = defaults.RustDeskIdServer;
+                _cachedConfig.VpsConfig.IsConfigured = defaults.IsConfigured;
+            }
+
             return _cachedConfig;
         }
         finally
