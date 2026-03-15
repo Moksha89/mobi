@@ -1,9 +1,10 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useDevices, deviceActions, sessionActions } from '../hooks/useApi';
 import { DeviceConnectionState } from '../types';
 import {
   Smartphone, RefreshCw, Monitor, RotateCcw, Camera, Package,
-  Upload, Download, Power, Terminal, Copy, Search, AlertTriangle, Edit2
+  Upload, Download, Power, Terminal, Copy, Search, AlertTriangle, Edit2, Eye
 } from 'lucide-react';
 
 const stateLabel = (s: DeviceConnectionState) =>
@@ -30,6 +31,7 @@ function BatteryIndicator({ level }: { level: number }) {
 }
 
 function Devices() {
+  const navigate = useNavigate();
   const { devices, loading, error, refreshDevices } = useDevices();
   const [search, setSearch] = useState('');
   const [actionMsg, setActionMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -160,6 +162,11 @@ function Devices() {
               </dl>
 
               <div className="device-card-actions">
+                <button className="btn btn-sm btn-primary"
+                  onClick={() => navigate(`/devices/${device.serialNumber}/screen`)}
+                  title="View and control phone screen in browser">
+                  <Eye size={12} /> View Screen
+                </button>
                 {!device.hasActiveSession ? (
                   <button className="btn btn-sm btn-success"
                     onClick={() => doAction('Start scrcpy', () => sessionActions.start(device.serialNumber))}>

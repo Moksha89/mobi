@@ -82,6 +82,42 @@ public class UpdateSettingsRequest
     public string? DefaultScrcpyArgs { get; set; }
 }
 
+/// <summary>Screen info response.</summary>
+public class ScreenInfo
+{
+    public int Width { get; set; }
+    public int Height { get; set; }
+}
+
+/// <summary>Tap request (x, y coordinates in device pixels).</summary>
+public class TapRequest
+{
+    public int X { get; set; }
+    public int Y { get; set; }
+}
+
+/// <summary>Swipe request.</summary>
+public class SwipeRequest
+{
+    public int X1 { get; set; }
+    public int Y1 { get; set; }
+    public int X2 { get; set; }
+    public int Y2 { get; set; }
+    public int DurationMs { get; set; } = 300;
+}
+
+/// <summary>Key event request (Android keycode).</summary>
+public class KeyRequest
+{
+    public int KeyCode { get; set; }
+}
+
+/// <summary>Text input request.</summary>
+public class TextRequest
+{
+    public string Text { get; set; } = string.Empty;
+}
+
 /// <summary>Log query filter parameters.</summary>
 public class LogQueryParams
 {

@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import { LayoutDashboard, Smartphone, Monitor, Server, ScrollText, Settings } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import Devices from './pages/Devices';
+import DeviceScreen from './pages/DeviceScreen';
 import Sessions from './pages/Sessions';
 import VpsRemote from './pages/VpsRemote';
 import Logs from './pages/Logs';
@@ -49,6 +50,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/devices" element={<Devices />} />
+          <Route path="/devices/:serial/screen" element={<DeviceScreen />} />
           <Route path="/sessions" element={<Sessions />} />
           <Route path="/vps" element={<VpsRemote />} />
           <Route path="/logs" element={<Logs />} />
