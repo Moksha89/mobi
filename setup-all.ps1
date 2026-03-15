@@ -548,67 +548,62 @@ try {
 
 Write-Host ""
 
-# Launch everything
+# ============================================================
+# Auto-Launch Everything
+# ============================================================
 if (-not $NoLaunch) {
-    $response = Read-Host "   Launch everything now? (y/n)"
-    if ($response -eq 'y' -or $response -eq 'Y' -or $response -eq '') {
-        
-        # Launch Cloud Tunnel
-        Write-Step "Launching Cloud Access Tunnel..."
-        $tunnelScript = Join-Path $RepoRoot "tunnel.ps1"
-        if (Test-Path $tunnelScript) {
-            Start-Process -FilePath "powershell" -ArgumentList "-ExecutionPolicy Bypass -File `"$tunnelScript`"" -WorkingDirectory $RepoRoot
-            Write-Ok "Cloud tunnel starting (http://${RustDeskVpsIP}:5000)"
-        } else {
-            Write-Warn "tunnel.ps1 not found. Cloud access not available."
-        }
+    Write-Step "Launching everything..."
 
-        # Launch Web Dashboard
-        Write-Step "Launching Web Dashboard..."
-        Start-Process -FilePath "dotnet" -ArgumentList "run --project `"$RepoRoot\src\MobileControlHub.WebApi`"" -WorkingDirectory $RepoRoot
-        Write-Ok "Web Dashboard starting at http://localhost:5000"
-        
-        # Launch RustDesk
-        if ($hasRustDesk) {
-            Write-Step "Launching RustDesk..."
-            $rdExe = $null
-            foreach ($p in $rustDeskExePaths) {
-                if (Test-Path $p) { $rdExe = $p; break }
-            }
-            if ($rdExe) {
-                Start-Process -FilePath $rdExe
-                Write-Ok "RustDesk started"
-            }
-        }
-        
-        # Wait for dashboard to start, then open browser
-        Write-Host ""
-        Write-Host "   Waiting for dashboard to start..." -ForegroundColor Gray
-        Start-Sleep -Seconds 5
-        Start-Process "http://localhost:5000"
-        
-        Write-Host ""
-        Write-Host "============================================================" -ForegroundColor Green
-        Write-Host "   Everything is running!" -ForegroundColor Green
-        Write-Host "============================================================" -ForegroundColor Green
-        Write-Host ""
-        Write-Host "   Dashboard:  http://localhost:5000 (local)" -ForegroundColor White
-        Write-Host "   Cloud:      http://${RustDeskVpsIP}:5000 (from anywhere)" -ForegroundColor Green
-        Write-Host "   RustDesk:   Running (check system tray for ID)" -ForegroundColor White
-        Write-Host ""
-        Write-Host "   To access from anywhere:" -ForegroundColor Yellow
-        Write-Host "   1. Install RustDesk on your remote device" -ForegroundColor White
-        Write-Host "   2. Set ID Server: $RustDeskVpsIP" -ForegroundColor White
-        Write-Host "   3. Set Relay Server: $RustDeskVpsIP" -ForegroundColor White
-        Write-Host "   4. Set Key: $RustDeskPublicKey" -ForegroundColor White
-        Write-Host "   5. Enter your PC's RustDesk ID and password" -ForegroundColor White
-        Write-Host ""
-        Write-Host "   IMPORTANT: Set a permanent password in RustDesk:" -ForegroundColor Red
-        Write-Host "   RustDesk > Settings > Security > Set permanent password" -ForegroundColor White
-        Write-Host ""
+    # Launch Web Dashboard first (needs to be running before tunnel connects)
+    Write-Host "   Starting Web Dashboard..." -ForegroundColor White
+    Start-Process -FilePath "dotnet" -ArgumentList "run --project `"$RepoRoot\src\MobileControlHub.WebApi`"" -WorkingDirectory $RepoRoot
+    Write-Ok "Web Dashboard starting at http://localhost:5000"
+
+    # Wait for dashboard to be ready before starting tunnel
+    Write-Host "   Waiting for dashboard to start..." -ForegroundColor Gray
+    Start-Sleep -Seconds 8
+
+    # Launch Cloud Tunnel
+    Write-Host "   Starting Cloud Access Tunnel..." -ForegroundColor White
+    $tunnelScript = Join-Path $RepoRoot "tunnel.ps1"
+    if (Test-Path $tunnelScript) {
+        Start-Process -FilePath "powershell" -ArgumentList "-ExecutionPolicy Bypass -File `"$tunnelScript`"" -WorkingDirectory $RepoRoot
+        Write-Ok "Cloud tunnel starting (http://${RustDeskVpsIP}:5000)"
+    } else {
+        Write-Warn "tunnel.ps1 not found. Cloud access not available."
     }
+
+    # Launch RustDesk
+    if ($hasRustDesk) {
+        Write-Host "   Starting RustDesk..." -ForegroundColor White
+        $rdExe = $null
+        foreach ($p in $rustDeskExePaths) {
+            if (Test-Path $p) { $rdExe = $p; break }
+        }
+        if ($rdExe) {
+            Start-Process -FilePath $rdExe
+            Write-Ok "RustDesk started"
+        }
+    }
+
+    # Open browser
+    Start-Sleep -Seconds 2
+    Start-Process "http://localhost:5000"
+
+    Write-Host ""
+    Write-Host "============================================================" -ForegroundColor Green
+    Write-Host "   Everything is running!" -ForegroundColor Green
+    Write-Host "============================================================" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "   Dashboard:  http://localhost:5000 (local)" -ForegroundColor White
+    Write-Host "   Cloud:      http://${RustDeskVpsIP}:5000 (from anywhere)" -ForegroundColor Green
+    Write-Host "   RustDesk:   Running (check system tray for ID)" -ForegroundColor White
+    Write-Host ""
+    Write-Host "   IMPORTANT: Set a permanent password in RustDesk:" -ForegroundColor Red
+    Write-Host "   RustDesk > Settings > Security > Set permanent password" -ForegroundColor White
+    Write-Host ""
 } else {
-    Write-Host "   To launch later, double-click: start.bat" -ForegroundColor Yellow
+    Write-Host "   To launch, run: setup-all.bat" -ForegroundColor Yellow
 }
 
 Write-Host "   Press any key to exit..." -ForegroundColor Gray

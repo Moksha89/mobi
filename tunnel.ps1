@@ -5,10 +5,8 @@
 # This script:
 #   1. Generates an SSH key pair (if not already done)
 #   2. Copies the public key to the VPS (one-time, requires password)
-#   3. Establishes a persistent SSH reverse tunnel with auto-reconnect
-#
-# Usage: powershell -ExecutionPolicy Bypass -File tunnel.ps1
-#   or double-click tunnel.bat
+#   3. Clears any stale tunnel on the VPS before connecting
+#   4. Establishes a persistent SSH reverse tunnel with auto-reconnect
 
 param(
     [string]$VpsHost = "69.197.142.77",
@@ -57,18 +55,16 @@ if (Test-Path $SshKeyPath) {
         if (Test-Path $SshKeyPath) {
             Write-Ok "SSH key pair generated"
         } else {
-            # Fallback: try with empty passphrase differently
             & ssh-keygen -t ed25519 -f $SshKeyPath -N "" -C "mch-tunnel@$env:COMPUTERNAME"
             if (Test-Path $SshKeyPath) {
                 Write-Ok "SSH key pair generated"
             } else {
-                Write-Err "Failed to generate SSH key. Please run: ssh-keygen -t ed25519 -f $SshKeyPath"
+                Write-Err "Failed to generate SSH key."
                 exit 1
             }
         }
     } catch {
         Write-Err "ssh-keygen failed: $_"
-        Write-Host "   Make sure OpenSSH is installed (Windows 10/11 has it built-in)"
         exit 1
     }
 }
@@ -78,11 +74,17 @@ if (Test-Path $SshKeyPath) {
 # ============================================================
 Write-Step "Step 2: Setting up key-based authentication to VPS..."
 
+$keyAuthWorks = $false
 Write-Host "   Testing if key auth already works..."
-$testResult = & ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 -i $SshKeyPath "${VpsUser}@${VpsHost}" "echo KEY_AUTH_OK" 2>$null
-if ($testResult -eq "KEY_AUTH_OK") {
-    Write-Ok "Key-based authentication already configured"
-} else {
+try {
+    $testResult = & ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 -i $SshKeyPath "${VpsUser}@${VpsHost}" "echo KEY_AUTH_OK" 2>$null
+    if ($testResult -eq "KEY_AUTH_OK") {
+        $keyAuthWorks = $true
+        Write-Ok "Key-based authentication already configured"
+    }
+} catch {}
+
+if (-not $keyAuthWorks) {
     Write-Host "   Key auth not set up yet. Copying public key to VPS..."
     Write-Host "   You will be asked for the VPS password (one-time only)." -ForegroundColor Yellow
     Write-Host ""
@@ -90,32 +92,29 @@ if ($testResult -eq "KEY_AUTH_OK") {
     $pubKey = Get-Content $SshKeyPub -Raw
     $pubKey = $pubKey.Trim()
 
-    # Use ssh to append the public key to authorized_keys on the VPS
     Write-Host "   Connecting to ${VpsUser}@${VpsHost}..."
     $sshCmd = "mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo '$pubKey' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && echo 'KEY_COPIED_OK'"
     
     try {
         $result = & ssh -o StrictHostKeyChecking=no "${VpsUser}@${VpsHost}" $sshCmd
         if ($result -match "KEY_COPIED_OK") {
-            Write-Ok "Public key copied to VPS. Password login no longer needed for tunnel."
+            $keyAuthWorks = $true
+            Write-Ok "Public key copied to VPS. Password login no longer needed."
         } else {
-            Write-Warn "Key copy may have failed. You may be prompted for password each time."
+            Write-Warn "Key copy may have failed."
         }
     } catch {
         Write-Warn "Could not copy key automatically: $_"
-        Write-Host "   You can manually copy your public key:" -ForegroundColor Yellow
-        Write-Host "   type $SshKeyPub | ssh ${VpsUser}@${VpsHost} `"cat >> ~/.ssh/authorized_keys`"" -ForegroundColor Gray
     }
 }
 
 if ($SetupKeysOnly) {
-    Write-Host ""
-    Write-Ok "Key setup complete. Run tunnel.ps1 again (without -SetupKeysOnly) to start the tunnel."
+    Write-Ok "Key setup complete."
     exit 0
 }
 
 # ============================================================
-# Step 3: Start Persistent SSH Reverse Tunnel
+# Step 3: Clear stale tunnel on VPS, then connect
 # ============================================================
 Write-Step "Step 3: Starting SSH reverse tunnel..."
 Write-Host "   Local:  http://localhost:${LocalPort}" -ForegroundColor White
@@ -125,24 +124,52 @@ Write-Host "   The tunnel will auto-reconnect if disconnected." -ForegroundColor
 Write-Host "   Press Ctrl+C to stop." -ForegroundColor Gray
 Write-Host ""
 
+# Helper: clear any stale process holding RemotePort on the VPS
+function Clear-StaleTunnel {
+    try {
+        if ($keyAuthWorks) {
+            $killCmd = "fuser -k ${RemotePort}/tcp 2>/dev/null; sleep 1; echo CLEARED"
+            $out = & ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 -i $SshKeyPath "${VpsUser}@${VpsHost}" $killCmd 2>$null
+            if ($out -match "CLEARED") {
+                Write-Host "   Cleared stale connection on VPS port ${RemotePort}" -ForegroundColor Gray
+            }
+        }
+    } catch {}
+}
+
 $retryDelay = 5
 $maxRetryDelay = 60
 
 while ($true) {
     Write-Host "   [$(Get-Date -Format 'HH:mm:ss')] Connecting tunnel..." -ForegroundColor Gray
 
-    # SSH reverse tunnel: binds RemotePort on VPS to LocalPort on this PC
-    $sshArgs = @(
-        "-o", "StrictHostKeyChecking=no",
-        "-o", "ServerAliveInterval=30",
-        "-o", "ServerAliveCountMax=3",
-        "-o", "ExitOnForwardFailure=yes",
-        "-o", "BatchMode=yes",
-        "-i", $SshKeyPath,
-        "-N",
-        "-R", "0.0.0.0:${RemotePort}:localhost:${LocalPort}",
-        "${VpsUser}@${VpsHost}"
-    )
+    # Clear any stale tunnel before attempting to connect
+    Clear-StaleTunnel
+
+    # Build SSH args based on whether key auth works
+    if ($keyAuthWorks) {
+        $sshArgs = @(
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "ServerAliveInterval=30",
+            "-o", "ServerAliveCountMax=3",
+            "-o", "ExitOnForwardFailure=yes",
+            "-o", "BatchMode=yes",
+            "-i", $SshKeyPath,
+            "-N",
+            "-R", "0.0.0.0:${RemotePort}:localhost:${LocalPort}",
+            "${VpsUser}@${VpsHost}"
+        )
+    } else {
+        $sshArgs = @(
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "ServerAliveInterval=30",
+            "-o", "ServerAliveCountMax=3",
+            "-o", "ExitOnForwardFailure=yes",
+            "-N",
+            "-R", "0.0.0.0:${RemotePort}:localhost:${LocalPort}",
+            "${VpsUser}@${VpsHost}"
+        )
+    }
 
     $process = Start-Process -FilePath "ssh" -ArgumentList $sshArgs -NoNewWindow -Wait -PassThru
 
@@ -150,22 +177,7 @@ while ($true) {
         Write-Host "   [$(Get-Date -Format 'HH:mm:ss')] Tunnel disconnected cleanly." -ForegroundColor Yellow
         $retryDelay = 5
     } else {
-        Write-Warn "Tunnel exited with code $($process.ExitCode)"
-
-        # If BatchMode fails (no key auth), fall back to interactive
-        if ($process.ExitCode -eq 255) {
-            Write-Host "   Key auth may not be working. Trying with password prompt..." -ForegroundColor Yellow
-            $sshArgsFallback = @(
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "ServerAliveInterval=30",
-                "-o", "ServerAliveCountMax=3",
-                "-o", "ExitOnForwardFailure=yes",
-                "-N",
-                "-R", "0.0.0.0:${RemotePort}:localhost:${LocalPort}",
-                "${VpsUser}@${VpsHost}"
-            )
-            $process = Start-Process -FilePath "ssh" -ArgumentList $sshArgsFallback -NoNewWindow -Wait -PassThru
-        }
+        Write-Warn "Tunnel exited with code $($process.ExitCode). Will retry..."
     }
 
     Write-Host "   [$(Get-Date -Format 'HH:mm:ss')] Reconnecting in $retryDelay seconds..." -ForegroundColor Gray

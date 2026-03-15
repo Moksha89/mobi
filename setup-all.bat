@@ -1,22 +1,17 @@
 @echo off
-:: Mobile Control Hub - Complete One-Click Setup
-:: RIGHT-CLICK this file > "Run as administrator" for best results
-:: This sets up EVERYTHING: .NET, ADB, scrcpy, RustDesk, builds the app, and launches it
+:: ============================================================
+:: Mobile Control Hub - ONE-CLICK SETUP & LAUNCH
+:: ============================================================
+:: This is the ONLY file you need to run.
+:: It handles: setup, build, launch dashboard, cloud tunnel, RustDesk
+::
+:: Right-click > "Run as administrator" (recommended)
+:: ============================================================
 
 echo.
 echo ============================================================
-echo   Mobile Control Hub - Complete One-Click Setup
+echo    Mobile Control Hub - One-Click Setup ^& Launch
 echo ============================================================
-echo.
-echo   This will install and configure everything automatically.
-echo   For best results, run as Administrator.
 echo.
 
 powershell -ExecutionPolicy Bypass -File "%~dp0setup-all.ps1"
-
-if errorlevel 1 (
-    echo.
-    echo Setup encountered errors. Please check the output above.
-    echo.
-    pause
-)
