@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useDevices, deviceActions, sessionActions } from '../hooks/useApi';
+import { useDevices, deviceActions, sessionActions, virtualDeviceActions } from '../hooks/useApi';
 import { DeviceConnectionState } from '../types';
 import {
   Smartphone, RefreshCw, Monitor, RotateCcw, Camera, Package,
-  Upload, Download, Power, Terminal, Copy, Search, AlertTriangle, Edit2, Eye
+  Upload, Download, Power, Terminal, Copy, Search, AlertTriangle, Edit2, Eye, Cloud, CloudOff
 } from 'lucide-react';
 
 const stateLabel = (s: DeviceConnectionState) =>
@@ -37,6 +37,7 @@ function Devices() {
   const [actionMsg, setActionMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [editingName, setEditingName] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
+  const [connectingCloud, setConnectingCloud] = useState(false);
 
   const filtered = devices.filter(d => {
     const q = search.toLowerCase();
@@ -73,9 +74,26 @@ function Devices() {
           <h2>Devices</h2>
           <p>{devices.length} device(s) detected</p>
         </div>
-        <button className="btn btn-primary" onClick={refreshDevices}>
-          <RefreshCw size={14} /> Rescan
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-primary" onClick={async () => {
+            setConnectingCloud(true);
+            try {
+              await virtualDeviceActions.connectAll();
+              await refreshDevices();
+              setActionMsg({ type: 'success', text: 'Cloud devices connected' });
+              setTimeout(() => setActionMsg(null), 3000);
+            } catch (e) {
+              setActionMsg({ type: 'error', text: `Cloud connect failed: ${(e as Error).message}` });
+            } finally {
+              setConnectingCloud(false);
+            }
+          }} disabled={connectingCloud}>
+            <Cloud size={14} /> {connectingCloud ? 'Connecting...' : 'Connect Cloud Devices'}
+          </button>
+          <button className="btn btn-primary" onClick={refreshDevices}>
+            <RefreshCw size={14} /> Rescan
+          </button>
+        </div>
       </div>
 
       {error && <div className="alert alert-error"><AlertTriangle size={16} /> {error}</div>}
@@ -105,7 +123,10 @@ function Devices() {
             <div key={device.serialNumber} className="device-card">
               <div className="device-card-header">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Smartphone size={18} style={{ color: 'var(--accent)' }} />
+                  {device.isVirtual
+                    ? <Cloud size={18} style={{ color: '#a6e3a1' }} />
+                    : <Smartphone size={18} style={{ color: 'var(--accent)' }} />
+                  }
                   {editingName === device.serialNumber ? (
                     <div style={{ display: 'flex', gap: 4 }}>
                       <input
@@ -132,10 +153,17 @@ function Devices() {
                     </h4>
                   )}
                 </div>
-                <span className={`badge ${stateBadge(device.connectionState)}`}>
-                  <span className="badge-dot" />
-                  {stateLabel(device.connectionState)}
-                </span>
+                <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                  {device.isVirtual && (
+                    <span className="badge" style={{ background: '#1e4620', color: '#a6e3a1', fontSize: 10 }}>
+                      Cloud
+                    </span>
+                  )}
+                  <span className={`badge ${stateBadge(device.connectionState)}`}>
+                    <span className="badge-dot" />
+                    {stateLabel(device.connectionState)}
+                  </span>
+                </div>
               </div>
 
               <dl className="device-card-info">

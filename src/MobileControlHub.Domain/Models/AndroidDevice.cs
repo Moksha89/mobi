@@ -46,6 +46,12 @@ public class AndroidDevice
     /// <summary>Whether this device is selected in the UI for bulk actions.</summary>
     public bool IsSelected { get; set; }
 
+    /// <summary>Whether this is a virtual/cloud device (Redroid on VPS) vs physical USB device.</summary>
+    public bool IsVirtual { get; set; }
+
+    /// <summary>VPS host IP if this is a virtual device.</summary>
+    public string VpsHost { get; set; } = string.Empty;
+
     /// <summary>Display name: friendly name if set, otherwise model or serial.</summary>
     public string DisplayName => !string.IsNullOrWhiteSpace(FriendlyName)
         ? FriendlyName

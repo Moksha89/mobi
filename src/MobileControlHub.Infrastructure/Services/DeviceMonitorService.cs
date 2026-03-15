@@ -141,6 +141,15 @@ public class DeviceMonitorService : IDeviceMonitorService
                 var detailed = await _adbService.GetDeviceDetailsAsync(device.SerialNumber, ct);
                 detailed.ConnectionState = device.ConnectionState;
 
+                // Mark virtual/cloud devices (TCP/IP connections to VPS)
+                if (device.SerialNumber.Contains(':'))
+                {
+                    detailed.ConnectionType = "Cloud (TCP/IP)";
+                    detailed.IsVirtual = true;
+                    var hostPart = device.SerialNumber.Split(':')[0];
+                    detailed.VpsHost = hostPart;
+                }
+
                 // Apply friendly name if available
                 var name = await _configService.GetDeviceFriendlyNameAsync(device.SerialNumber);
                 if (!string.IsNullOrEmpty(name))

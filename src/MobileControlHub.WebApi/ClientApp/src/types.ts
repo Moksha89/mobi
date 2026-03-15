@@ -13,6 +13,18 @@ export interface AndroidDevice {
   hasActiveSession: boolean;
   isSelected: boolean;
   displayName: string;
+  isVirtual: boolean;
+  vpsHost: string;
+}
+
+export interface VirtualDeviceInfo {
+  host: string;
+  port: number;
+  serial: string;
+  friendlyName: string;
+  connected: boolean;
+  androidVersion: string;
+  model: string;
 }
 
 export enum DeviceConnectionState {

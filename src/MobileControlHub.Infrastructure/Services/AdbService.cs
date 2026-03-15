@@ -241,4 +241,20 @@ public class AdbService : IAdbService
         await _logService.LogWarningAsync("Killing ADB server", category: "ADB");
         return await ProcessRunner.RunAsync(adbPath, "kill-server", timeoutMs: 10000, ct: ct);
     }
+
+    public async Task<CommandResult> ConnectDeviceAsync(string host, int port, CancellationToken ct = default)
+    {
+        var adbPath = await GetAdbPathAsync();
+        var target = $"{host}:{port}";
+        await _logService.LogInfoAsync($"Connecting to remote device {target}", category: "ADB");
+        return await ProcessRunner.RunAsync(adbPath, $"connect {target}", timeoutMs: 15000, ct: ct);
+    }
+
+    public async Task<CommandResult> DisconnectDeviceAsync(string host, int port, CancellationToken ct = default)
+    {
+        var adbPath = await GetAdbPathAsync();
+        var target = $"{host}:{port}";
+        await _logService.LogInfoAsync($"Disconnecting remote device {target}", category: "ADB");
+        return await ProcessRunner.RunAsync(adbPath, $"disconnect {target}", timeoutMs: 10000, ct: ct);
+    }
 }

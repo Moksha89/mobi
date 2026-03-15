@@ -249,6 +249,17 @@ export function useVps() {
   return { vps, loading, testing, error, load, save, test };
 }
 
+// Virtual device actions
+export const virtualDeviceActions = {
+  getAll: () => fetchJson<import('../types').VirtualDeviceInfo[]>('/virtual-devices'),
+  connectAll: () => fetchJson('/virtual-devices/connect-all', { method: 'POST' }),
+  disconnectAll: () => fetchJson('/virtual-devices/disconnect-all', { method: 'POST' }),
+  connect: (host: string, port: number, friendlyName?: string) =>
+    fetchJson('/virtual-devices/connect', { method: 'POST', body: JSON.stringify({ host, port, friendlyName }) }),
+  disconnect: (host: string, port: number) =>
+    fetchJson('/virtual-devices/disconnect', { method: 'POST', body: JSON.stringify({ host, port }) }),
+};
+
 // Device action helpers
 export const deviceActions = {
   reconnect: (serial: string) => fetchJson(`/devices/${serial}/reconnect`, { method: 'POST' }),

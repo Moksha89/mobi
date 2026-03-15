@@ -52,4 +52,10 @@ public interface IAdbService
 
     /// <summary>Kill the ADB server.</summary>
     Task<CommandResult> KillServerAsync(CancellationToken ct = default);
+
+    /// <summary>Connect to a remote device via ADB TCP/IP (adb connect host:port).</summary>
+    Task<CommandResult> ConnectDeviceAsync(string host, int port, CancellationToken ct = default);
+
+    /// <summary>Disconnect a remote device via ADB (adb disconnect host:port).</summary>
+    Task<CommandResult> DisconnectDeviceAsync(string host, int port, CancellationToken ct = default);
 }

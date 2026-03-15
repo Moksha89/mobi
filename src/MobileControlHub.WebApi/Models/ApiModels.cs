@@ -129,6 +129,26 @@ public class LogQueryParams
     public int Limit { get; set; } = 200;
 }
 
+/// <summary>Request to connect to a virtual Android device on VPS.</summary>
+public class ConnectVirtualDeviceRequest
+{
+    public string Host { get; set; } = string.Empty;
+    public int Port { get; set; } = 5555;
+    public string FriendlyName { get; set; } = string.Empty;
+}
+
+/// <summary>Virtual device info response.</summary>
+public class VirtualDeviceInfo
+{
+    public string Host { get; set; } = string.Empty;
+    public int Port { get; set; }
+    public string Serial { get; set; } = string.Empty;
+    public string FriendlyName { get; set; } = string.Empty;
+    public bool Connected { get; set; }
+    public string AndroidVersion { get; set; } = string.Empty;
+    public string Model { get; set; } = string.Empty;
+}
+
 /// <summary>Generic API result wrapper.</summary>
 public class ApiResult
 {
