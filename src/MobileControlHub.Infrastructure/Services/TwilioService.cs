@@ -220,14 +220,14 @@ public class TwilioService : ITwilioService
         return messages;
     }
 
-    public async Task<bool> SendSmsAsync(string containerName, string to, string body, CancellationToken ct = default)
+    public async Task<(bool Success, string Error)> SendSmsAsync(string containerName, string to, string body, CancellationToken ct = default)
     {
-        if (!IsConfigured) return false;
+        if (!IsConfigured) return (false, "Twilio is not configured");
 
         try
         {
             var numberInfo = await GetNumberForContainerAsync(containerName, ct);
-            if (numberInfo == null) return false;
+            if (numberInfo == null) return (false, "No phone number assigned to this device");
 
             var message = await MessageResource.CreateAsync(
                 to: new PhoneNumber(to),
@@ -250,12 +250,26 @@ public class TwilioService : ITwilioService
                 $"Sent SMS from {numberInfo.PhoneNumber} to {to}",
                 category: "Twilio");
 
-            return message.Status != MessageResource.StatusEnum.Failed;
+            if (message.Status == MessageResource.StatusEnum.Failed)
+                return (false, $"Twilio rejected the message: {message.ErrorMessage}");
+
+            return (true, "");
+        }
+        catch (Twilio.Exceptions.ApiException tex)
+        {
+            var msg = tex.Message;
+            if (msg.Contains("unverified", StringComparison.OrdinalIgnoreCase) ||
+                msg.Contains("trial", StringComparison.OrdinalIgnoreCase))
+            {
+                msg = $"Twilio trial accounts can only send SMS to verified numbers. Verify the recipient at https://console.twilio.com/us1/develop/phone-numbers/manage/verified -- Original error: {msg}";
+            }
+            await _logService.LogErrorAsync($"Failed to send SMS: {msg}", source: "Twilio");
+            return (false, msg);
         }
         catch (Exception ex)
         {
             await _logService.LogErrorAsync($"Failed to send SMS: {ex.Message}", source: "Twilio");
-            return false;
+            return (false, ex.Message);
         }
     }
 

@@ -89,9 +89,9 @@ public class TwilioController : ControllerBase
         if (string.IsNullOrEmpty(request.ContainerName) || string.IsNullOrEmpty(request.To) || string.IsNullOrEmpty(request.Body))
             return BadRequest(ApiResult.Fail("Container name, 'to' number, and message body are required"));
 
-        var success = await _twilioService.SendSmsAsync(request.ContainerName, request.To, request.Body, ct);
+        var (success, error) = await _twilioService.SendSmsAsync(request.ContainerName, request.To, request.Body, ct);
         if (!success)
-            return BadRequest(ApiResult.Fail("Failed to send SMS. Check that the container has an assigned number."));
+            return BadRequest(ApiResult.Fail(error));
 
         return Ok(ApiResult.Ok("SMS sent successfully"));
     }

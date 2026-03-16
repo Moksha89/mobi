@@ -24,8 +24,8 @@ public interface ITwilioService
     /// <summary>Get SMS messages for a specific phone number.</summary>
     Task<List<SmsMessage>> GetMessagesAsync(string containerName, int limit = 50, CancellationToken ct = default);
 
-    /// <summary>Send an SMS from a device's assigned number.</summary>
-    Task<bool> SendSmsAsync(string containerName, string to, string body, CancellationToken ct = default);
+    /// <summary>Send an SMS from a device's assigned number. Returns (success, errorMessage).</summary>
+    Task<(bool Success, string Error)> SendSmsAsync(string containerName, string to, string body, CancellationToken ct = default);
 
     /// <summary>Record an incoming SMS (called by webhook).</summary>
     Task RecordIncomingSmsAsync(string toNumber, string fromNumber, string body, CancellationToken ct = default);

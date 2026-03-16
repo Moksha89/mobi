@@ -22,7 +22,7 @@ public class VirtualDevicesController : ControllerBase
     private readonly ITwilioService _twilioService;
 
     private const int BaseAdbPort = 5555;
-    private const string RedroidImage = "aureliolo/redroid:14.0.0_amd64_with_gapps";
+    private const string RedroidImage = "redroid/redroid:14.0.0_mindthegapps";
 
     public VirtualDevicesController(
         IAdbService adbService,

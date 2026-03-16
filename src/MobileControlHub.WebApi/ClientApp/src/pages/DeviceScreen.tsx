@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, RotateCcw, Home, Square, ChevronUp, ChevronDown, ChevronLeft, ChevronRight,
   Power, Type, Volume2, VolumeX, Maximize2, Minimize2, Sun, Lock, Unlock, Bell,
-  Camera, RotateCw, Trash2, Clipboard, Search, Settings
+  Camera, RotateCw, Trash2, Clipboard, Search, Settings, MessageSquare, Phone, Send, RefreshCw
 } from 'lucide-react';
+import { twilioActions } from '../hooks/useApi';
+import type { SmsMessage, TwilioNumberInfo } from '../types';
 
 const API_BASE = '/api';
 
@@ -15,6 +17,8 @@ interface ScreenInfo {
 
 function DeviceScreen() {
   const { serial } = useParams<{ serial: string }>();
+  const [searchParams] = useSearchParams();
+  const containerName = searchParams.get('container') || '';
   const navigate = useNavigate();
   const imgRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -32,6 +36,17 @@ function DeviceScreen() {
   const [imgScale, setImgScale] = useState(0.5);
   const [frameSize, setFrameSize] = useState(0);
 
+  // SMS state
+  const [showSms, setShowSms] = useState(false);
+  const [smsMessages, setSmsMessages] = useState<SmsMessage[]>([]);
+  const [smsLoading, setSmsLoading] = useState(false);
+  const [phoneInfo, setPhoneInfo] = useState<TwilioNumberInfo | null>(null);
+  const [smsSendTo, setSmsSendTo] = useState('');
+  const [smsSendBody, setSmsSendBody] = useState('');
+  const [smsSending, setSmsSending] = useState(false);
+  const [smsError, setSmsError] = useState<string | null>(null);
+  const [smsSuccess, setSmsSuccess] = useState<string | null>(null);
+
   // Touch tracking refs to avoid stale closure issues
   const swipeStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const isDraggingRef = useRef(false);
@@ -40,7 +55,7 @@ function DeviceScreen() {
   const streamingRef = useRef(true);
   const fetchingRef = useRef(false);
 
-  // Fetch screen info on mount
+  // Fetch screen info and phone number on mount
   useEffect(() => {
     if (!serial) return;
     fetch(`${API_BASE}/devices/${serial}/screen/info`)
@@ -50,6 +65,41 @@ function DeviceScreen() {
       })
       .catch(() => {});
   }, [serial]);
+
+  useEffect(() => {
+    if (!containerName) return;
+    twilioActions.getNumberForContainer(containerName)
+      .then(info => setPhoneInfo(info))
+      .catch(() => setPhoneInfo(null));
+  }, [containerName]);
+
+  const loadSmsMessages = async () => {
+    if (!containerName) return;
+    setSmsLoading(true);
+    try {
+      const msgs = await twilioActions.getMessages(containerName);
+      setSmsMessages(msgs);
+    } catch { setSmsMessages([]); }
+    setSmsLoading(false);
+  };
+
+  const handleSmsSend = async () => {
+    if (!containerName || !smsSendTo || !smsSendBody) return;
+    setSmsSending(true);
+    setSmsError(null);
+    setSmsSuccess(null);
+    try {
+      await twilioActions.sendSms(containerName, smsSendTo, smsSendBody);
+      setSmsSendTo('');
+      setSmsSendBody('');
+      setSmsSuccess('SMS sent!');
+      setTimeout(() => setSmsSuccess(null), 3000);
+      await loadSmsMessages();
+    } catch (e) {
+      setSmsError((e as Error).message);
+    }
+    setSmsSending(false);
+  };
 
   // Screenshot streaming loop — optimized: fetch as fast as network allows
   useEffect(() => {
@@ -473,6 +523,91 @@ function DeviceScreen() {
               <button className="ctrl-btn small" onClick={() => sendKey(123)} title="Move End">MvEnd</button>
             </div>
           </div>
+
+          {/* SMS Inbox Panel */}
+          {containerName && phoneInfo && (
+            <div className="control-section">
+              <h4 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <MessageSquare size={14} /> SMS Inbox
+                </span>
+                <button className="ctrl-btn small" onClick={() => { setShowSms(!showSms); if (!showSms) loadSmsMessages(); }}>
+                  {showSms ? 'Hide' : 'Show'}
+                </button>
+              </h4>
+              <div style={{ fontSize: 11, color: '#a6e3a1', fontFamily: 'monospace', marginBottom: 6 }}>
+                <Phone size={10} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
+                {phoneInfo.phoneNumber}
+              </div>
+              {showSms && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {/* Send SMS form */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: 8, background: 'var(--bg)', borderRadius: 6, border: '1px solid var(--border)' }}>
+                    <input
+                      value={smsSendTo}
+                      onChange={e => setSmsSendTo(e.target.value)}
+                      placeholder="To: +1234567890"
+                      style={{ fontSize: 12, padding: '4px 8px' }}
+                    />
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <input
+                        value={smsSendBody}
+                        onChange={e => setSmsSendBody(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handleSmsSend()}
+                        placeholder="Message..."
+                        style={{ fontSize: 12, padding: '4px 8px', flex: 1 }}
+                      />
+                      <button
+                        className="btn btn-sm btn-primary"
+                        onClick={handleSmsSend}
+                        disabled={smsSending || !smsSendTo || !smsSendBody}
+                        style={{ padding: '4px 8px', fontSize: 11 }}
+                      >
+                        <Send size={10} /> {smsSending ? '...' : 'Send'}
+                      </button>
+                    </div>
+                    {smsError && <div style={{ fontSize: 10, color: '#f38ba8', wordBreak: 'break-word' }}>{smsError}</div>}
+                    {smsSuccess && <div style={{ fontSize: 10, color: '#a6e3a1' }}>{smsSuccess}</div>}
+                  </div>
+
+                  {/* Messages list */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{smsMessages.length} message(s)</span>
+                    <button className="ctrl-btn small" onClick={loadSmsMessages} disabled={smsLoading}>
+                      <RefreshCw size={10} /> Refresh
+                    </button>
+                  </div>
+                  <div style={{ maxHeight: 200, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {smsLoading ? (
+                      <div style={{ textAlign: 'center', padding: 12, color: 'var(--text-muted)', fontSize: 11 }}>Loading...</div>
+                    ) : smsMessages.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: 12, color: 'var(--text-muted)', fontSize: 11 }}>
+                        No messages yet.
+                      </div>
+                    ) : (
+                      smsMessages.map(msg => (
+                        <div key={msg.id} style={{
+                          padding: '6px 8px', borderRadius: 6, fontSize: 11,
+                          background: msg.direction === 'inbound' ? 'rgba(166,227,161,0.1)' : 'rgba(137,180,250,0.1)',
+                          border: `1px solid ${msg.direction === 'inbound' ? 'rgba(166,227,161,0.2)' : 'rgba(137,180,250,0.2)'}`,
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                            <span style={{ fontWeight: 600, color: msg.direction === 'inbound' ? '#a6e3a1' : '#89b4fa' }}>
+                              {msg.direction === 'inbound' ? `From: ${msg.fromNumber}` : `To: ${msg.toNumber}`}
+                            </span>
+                            <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>
+                              {new Date(msg.receivedAt).toLocaleTimeString()}
+                            </span>
+                          </div>
+                          <div style={{ color: 'var(--text-primary)' }}>{msg.body}</div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="control-section">
             <h4>PIN / Password Unlock</h4>

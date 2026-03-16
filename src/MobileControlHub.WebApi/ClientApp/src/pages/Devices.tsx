@@ -256,7 +256,7 @@ function Devices() {
                   <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                     {cd.connected ? (
                       <button className="btn btn-sm btn-primary"
-                        onClick={() => navigate(`/devices/${cd.serial}/screen`)}
+                        onClick={() => navigate(`/devices/${cd.serial}/screen?container=${cd.containerName}`)}
                         title="View screen">
                         <Eye size={10} /> View Screen
                       </button>
