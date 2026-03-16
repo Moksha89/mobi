@@ -537,6 +537,43 @@ if (-not $NoLaunch) {
         Write-Warn "tunnel.ps1 not found. Cloud access not available."
     }
 
+    # Start background device sync job (pushes local physical devices to VPS every 10 seconds)
+    Write-Host "   Starting Physical Device Sync to VPS..." -ForegroundColor White
+    $syncBlock = {
+        param($vpsIP)
+        while ($true) {
+            try {
+                $localDevices = Invoke-RestMethod -Uri "http://localhost:5000/api/devices" -TimeoutSec 5
+                $physicalDevices = @()
+                foreach ($d in $localDevices) {
+                    if (-not $d.isVirtual) {
+                        $physicalDevices += @{
+                            serial = $d.serialNumber
+                            model = $d.model
+                            manufacturer = $d.manufacturer
+                            androidVersion = $d.androidVersion
+                            connectionState = if ($d.connectionState -eq 1) { "Online" } elseif ($d.connectionState -eq 3) { "Unauthorized" } else { "Offline" }
+                            batteryLevel = $d.batteryLevel
+                            isScreenOn = $d.isScreenOn
+                            friendlyName = $d.friendlyName
+                            source = "remote-pc"
+                            transportType = "usb"
+                        }
+                    }
+                }
+                $json = $physicalDevices | ConvertTo-Json -Depth 3
+                if (-not $json) { $json = "[]" }
+                if ($physicalDevices.Count -eq 1) { $json = "[$json]" }
+                Invoke-RestMethod -Uri "http://${vpsIP}:5000/api/remote-devices/push" -Method POST -Body $json -ContentType "application/json" -TimeoutSec 5 | Out-Null
+            } catch {
+                # Silently retry
+            }
+            Start-Sleep -Seconds 10
+        }
+    }
+    Start-Job -ScriptBlock $syncBlock -ArgumentList $RustDeskVpsIP | Out-Null
+    Write-Ok "Physical device sync started (pushes to VPS every 10s)"
+
     # Launch RustDesk (only if not already running)
     if ($hasRustDesk) {
         $rdRunning = Get-Process -Name "rustdesk" -ErrorAction SilentlyContinue

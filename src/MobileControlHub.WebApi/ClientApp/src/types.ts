@@ -212,6 +212,9 @@ export interface RemoteBridgeStatus {
   }>;
   totalDevices: number;
   lastScan: string;
+  pushActive: boolean;
+  pushedDevices: number;
+  lastPush: string;
 }
 
 export enum DeviceConnectionState {

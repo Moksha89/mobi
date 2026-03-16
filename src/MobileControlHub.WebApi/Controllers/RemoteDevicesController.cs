@@ -19,18 +19,48 @@ public class RemoteDevicesController : ControllerBase
     };
 
     private static readonly List<RemotePhysicalDevice> _cachedDevices = new();
+    private static readonly List<RemotePhysicalDevice> _pushedDevices = new();
     private static DateTime _lastScan = DateTime.MinValue;
+    private static DateTime _lastPush = DateTime.MinValue;
 
-    /// <summary>Get all remote physical devices discovered via ADB bridge.</summary>
+    /// <summary>Get all remote physical devices (from ADB bridge + pushed from PC).</summary>
     [HttpGet]
     public async Task<ActionResult<List<RemotePhysicalDevice>>> GetRemoteDevices(CancellationToken ct)
     {
-        // Re-scan if cache is older than 5 seconds
+        // Re-scan ADB bridge if cache is older than 5 seconds
         if ((DateTime.UtcNow - _lastScan).TotalSeconds > 5)
         {
             await ScanRemoteDevicesAsync(ct);
         }
-        return Ok(_cachedDevices.ToList());
+
+        // Combine ADB-scanned devices + pushed devices (pushed devices expire after 30s)
+        var combined = new List<RemotePhysicalDevice>(_cachedDevices);
+        lock (_pushedDevices)
+        {
+            if ((DateTime.UtcNow - _lastPush).TotalSeconds < 30)
+            {
+                // Add pushed devices that aren't already in the ADB-scanned list
+                foreach (var pd in _pushedDevices)
+                {
+                    if (!combined.Any(d => d.Serial == pd.Serial))
+                        combined.Add(pd);
+                }
+            }
+        }
+        return Ok(combined);
+    }
+
+    /// <summary>Push device list from PC to VPS (called by PC's background sync job).</summary>
+    [HttpPost("push")]
+    public ActionResult<ApiResult> PushDevices([FromBody] List<RemotePhysicalDevice> devices)
+    {
+        lock (_pushedDevices)
+        {
+            _pushedDevices.Clear();
+            _pushedDevices.AddRange(devices);
+            _lastPush = DateTime.UtcNow;
+        }
+        return Ok(ApiResult.Ok($"Received {devices.Count} device(s) from PC"));
     }
 
     /// <summary>Force rescan of remote physical devices.</summary>
@@ -68,7 +98,7 @@ public class RemoteDevicesController : ControllerBase
         return Ok(ApiResult.Ok("Host removed"));
     }
 
-    /// <summary>Check if the remote ADB bridge is connected (tunnel active).</summary>
+    /// <summary>Check if the remote ADB bridge is connected (tunnel active) and push status.</summary>
     [HttpGet("status")]
     public async Task<ActionResult> GetBridgeStatus(CancellationToken ct)
     {
@@ -85,11 +115,19 @@ public class RemoteDevicesController : ControllerBase
                 DeviceCount = _cachedDevices.Count(d => d.Source == $"remote-{host.Label.ToLowerInvariant()}")
             });
         }
+
+        var pushActive = (DateTime.UtcNow - _lastPush).TotalSeconds < 30;
+        int pushedCount;
+        lock (_pushedDevices) { pushedCount = _pushedDevices.Count; }
+
         return Ok(new
         {
             Hosts = results,
-            TotalDevices = _cachedDevices.Count,
-            LastScan = _lastScan
+            TotalDevices = _cachedDevices.Count + (pushActive ? pushedCount : 0),
+            LastScan = _lastScan,
+            PushActive = pushActive,
+            PushedDevices = pushedCount,
+            LastPush = _lastPush
         });
     }
 

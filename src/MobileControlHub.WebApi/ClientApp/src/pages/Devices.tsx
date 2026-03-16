@@ -1032,11 +1032,13 @@ function Devices() {
             <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 'normal' }}>
               {remoteDevices.length} device(s)
             </span>
-            {remoteBridgeStatus && remoteBridgeStatus.hosts.length > 0 && (
+            {remoteBridgeStatus && (
               <span style={{ fontSize: 11 }}>
-                {remoteBridgeStatus.hosts[0].isReachable
-                  ? <span style={{ color: '#a6e3a1', display: 'inline-flex', alignItems: 'center', gap: 3 }}><Wifi size={12} /> Bridge Connected</span>
-                  : <span style={{ color: '#f38ba8', display: 'inline-flex', alignItems: 'center', gap: 3 }}><WifiOff size={12} /> Bridge Offline</span>
+                {remoteBridgeStatus.pushActive
+                  ? <span style={{ color: '#a6e3a1', display: 'inline-flex', alignItems: 'center', gap: 3 }}><Wifi size={12} /> PC Connected</span>
+                  : remoteBridgeStatus.hosts.length > 0 && remoteBridgeStatus.hosts[0].isReachable
+                    ? <span style={{ color: '#a6e3a1', display: 'inline-flex', alignItems: 'center', gap: 3 }}><Wifi size={12} /> ADB Bridge Connected</span>
+                    : <span style={{ color: '#f38ba8', display: 'inline-flex', alignItems: 'center', gap: 3 }}><WifiOff size={12} /> PC Offline</span>
                 }
               </span>
             )}
@@ -1066,9 +1068,9 @@ function Devices() {
             <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-muted)' }}>
               <Smartphone size={32} style={{ opacity: 0.3, marginBottom: 8 }} />
               <p style={{ margin: '0 0 4px' }}>
-                {remoteBridgeStatus && remoteBridgeStatus.hosts.length > 0 && remoteBridgeStatus.hosts[0].isReachable
-                  ? 'Bridge connected but no physical devices found. Connect a phone via USB to your PC.'
-                  : 'No PC bridge connected. Run setup-all.bat on your PC to bridge physical devices.'}
+                {remoteBridgeStatus && (remoteBridgeStatus.pushActive || (remoteBridgeStatus.hosts.length > 0 && remoteBridgeStatus.hosts[0].isReachable))
+                  ? 'PC connected but no physical devices found. Connect a phone via USB to your PC.'
+                  : 'No PC connected. Run setup-all.bat on your PC to sync physical devices.'}
               </p>
               <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)' }}>
                 Physical phones connected via USB to your PC will appear here automatically.
