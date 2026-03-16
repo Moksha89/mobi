@@ -316,6 +316,100 @@ export interface VpsConfiguration {
   lastTestedAt: string | null;
 }
 
+// Cuttlefish VM Platform types (Genymotion-like)
+export interface CuttlefishProfile {
+  id: string;
+  name: string;
+  brand: string;
+  model: string;
+  category: string;
+  cpuCores: number;
+  ramMb: number;
+  storageGb: number;
+  screenWidth: number;
+  screenHeight: number;
+  screenDpi: number;
+  gpuMode: string;
+  description: string;
+  supportedAndroidVersions: string[];
+  hasModem: boolean;
+  hasGps: boolean;
+  hasSensors: boolean;
+  hasCamera: boolean;
+  hasBiometrics: boolean;
+}
+
+export interface CuttlefishImage {
+  id: string;
+  name: string;
+  androidVersion: string;
+  apiLevel: number;
+  buildId: string;
+  branch: string;
+  target: string;
+  hasGapps: boolean;
+  isDefault: boolean;
+  description: string;
+}
+
+export interface CuttlefishDevice {
+  id: string;
+  name: string;
+  containerName: string;
+  state: string;
+  profileId: string;
+  profileName: string;
+  imageId: string;
+  androidVersion: string;
+  brand: string;
+  model: string;
+  cpuCores: number;
+  ramMb: number;
+  storageGb: number;
+  screenWidth: number;
+  screenHeight: number;
+  screenDpi: number;
+  adbPort: number;
+  webRtcPort: number;
+  controlPort: number;
+  adbAddress: string;
+  webRtcUrl: string;
+  phoneNumber?: string;
+  createdAt: string;
+  startedAt?: string;
+  uptimeSeconds: number;
+  gpuAccelerated: boolean;
+  hasGapps: boolean;
+  hasModem: boolean;
+  hasGps: boolean;
+  hasSensors: boolean;
+  hasCamera: boolean;
+  hasBiometrics: boolean;
+  gpsLocation?: string;
+  batteryLevel: number;
+  batteryStatus: string;
+  networkMode: string;
+  orientation: string;
+}
+
+export interface CuttlefishStatus {
+  isConfigured: boolean;
+  isAvailable: boolean;
+  hostReachable: boolean;
+  hostAddress: string;
+  kvmAvailable: boolean;
+  dockerAvailable: boolean;
+  dockerVersion: string;
+  cuttlefishInstalled: boolean;
+  totalDevices: number;
+  runningDevices: number;
+  hostCpuCores: string;
+  hostMemoryGb: string;
+  hostDiskGb: string;
+  gpuAvailable: boolean;
+  gpuModel: string;
+}
+
 export interface ApiResult {
   success: boolean;
   message: string;

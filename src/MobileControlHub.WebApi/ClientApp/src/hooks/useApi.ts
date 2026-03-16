@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { SystemStatus, AndroidDevice, ScrcpySession, LogEntry, AppConfiguration, VpsConfiguration, TwilioAccountInfo, SmsMessage, GenymotionRecipe, GenymotionInstance, HardwareProfile, OsImage, CloudDevice, CloudPlatformStatus, RemotePhysicalDevice, RemoteBridgeStatus } from '../types';
+import type { SystemStatus, AndroidDevice, ScrcpySession, LogEntry, AppConfiguration, VpsConfiguration, TwilioAccountInfo, SmsMessage, GenymotionRecipe, GenymotionInstance, HardwareProfile, OsImage, CloudDevice, CloudPlatformStatus, RemotePhysicalDevice, RemoteBridgeStatus, CuttlefishProfile, CuttlefishImage, CuttlefishDevice, CuttlefishStatus } from '../types';
 
 const API_BASE = '/api';
 
@@ -310,6 +310,33 @@ export const cloudPlatformActions = {
     fetchJson('/cloud-platform/devices/' + deviceId + '/restart', { method: 'POST' }),
   getStreamUrl: (deviceId: string) =>
     fetchJson<{ streamUrl: string }>('/cloud-platform/devices/' + deviceId + '/stream-url'),
+};
+
+// Cuttlefish VM Platform actions (Genymotion-like)
+export const cuttlefishActions = {
+  getStatus: () => fetchJson<CuttlefishStatus>('/cuttlefish/status'),
+  getProfiles: () => fetchJson<CuttlefishProfile[]>('/cuttlefish/profiles'),
+  getImages: () => fetchJson<CuttlefishImage[]>('/cuttlefish/images'),
+  getDevices: () => fetchJson<CuttlefishDevice[]>('/cuttlefish/devices'),
+  getDevice: (deviceId: string) => fetchJson<CuttlefishDevice>(`/cuttlefish/devices/${deviceId}`),
+  createDevice: (data: { name: string; profileId: string; imageId: string; assignPhoneNumber?: boolean; enableGpu?: boolean }) =>
+    fetchJson<{ success: boolean; message: string; device: CuttlefishDevice }>('/cuttlefish/devices/create', { method: 'POST', body: JSON.stringify(data) }),
+  removeDevice: (deviceId: string) =>
+    fetchJson('/cuttlefish/devices/' + deviceId + '/remove', { method: 'POST' }),
+  restartDevice: (deviceId: string) =>
+    fetchJson('/cuttlefish/devices/' + deviceId + '/restart', { method: 'POST' }),
+  getStreamUrl: (deviceId: string) =>
+    fetchJson<{ streamUrl: string }>('/cuttlefish/devices/' + deviceId + '/stream-url'),
+  shell: (deviceId: string, command: string) =>
+    fetchJson('/cuttlefish/devices/' + deviceId + '/shell', { method: 'POST', body: JSON.stringify({ command }) }),
+  setGps: (deviceId: string, latitude: number, longitude: number) =>
+    fetchJson('/cuttlefish/devices/' + deviceId + '/gps', { method: 'POST', body: JSON.stringify({ latitude, longitude }) }),
+  setBattery: (deviceId: string, level: number, status: string) =>
+    fetchJson('/cuttlefish/devices/' + deviceId + '/battery', { method: 'POST', body: JSON.stringify({ level, status }) }),
+  setNetwork: (deviceId: string, mode: string) =>
+    fetchJson('/cuttlefish/devices/' + deviceId + '/network', { method: 'POST', body: JSON.stringify({ mode }) }),
+  rotate: (deviceId: string, orientation: string) =>
+    fetchJson('/cuttlefish/devices/' + deviceId + '/rotate', { method: 'POST', body: JSON.stringify({ orientation }) }),
 };
 
 // Remote physical device actions (ADB bridge from PC)
