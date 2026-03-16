@@ -97,6 +97,19 @@ public class DatabaseManager : IDisposable
                 ReceivedAt TEXT NOT NULL DEFAULT (datetime('now'))
             );", ct);
 
+        // Create call logs table
+        await ExecuteNonQueryAsync(connection, @"
+            CREATE TABLE IF NOT EXISTS CallLogs (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                PhoneNumber TEXT NOT NULL,
+                FromNumber TEXT NOT NULL,
+                ToNumber TEXT NOT NULL,
+                Direction TEXT NOT NULL DEFAULT 'inbound',
+                Status TEXT NOT NULL DEFAULT 'completed',
+                DurationSeconds INTEGER NOT NULL DEFAULT 0,
+                ReceivedAt TEXT NOT NULL DEFAULT (datetime('now'))
+            );", ct);
+
         // Create indexes for common queries
         await ExecuteNonQueryAsync(connection,
             "CREATE INDEX IF NOT EXISTS IX_LogEntries_Timestamp ON LogEntries(Timestamp DESC);", ct);
@@ -110,6 +123,10 @@ public class DatabaseManager : IDisposable
             "CREATE INDEX IF NOT EXISTS IX_SmsMessages_ReceivedAt ON SmsMessages(ReceivedAt DESC);", ct);
         await ExecuteNonQueryAsync(connection,
             "CREATE INDEX IF NOT EXISTS IX_TwilioNumbers_Container ON TwilioNumbers(ContainerName);", ct);
+        await ExecuteNonQueryAsync(connection,
+            "CREATE INDEX IF NOT EXISTS IX_CallLogs_PhoneNumber ON CallLogs(PhoneNumber);", ct);
+        await ExecuteNonQueryAsync(connection,
+            "CREATE INDEX IF NOT EXISTS IX_CallLogs_ReceivedAt ON CallLogs(ReceivedAt DESC);", ct);
     }
 
     private static async Task ExecuteNonQueryAsync(SqliteConnection connection, string sql, CancellationToken ct)

@@ -32,6 +32,12 @@ public interface ITwilioService
 
     /// <summary>Get Twilio account info (balance, etc).</summary>
     Task<TwilioAccountInfo> GetAccountInfoAsync(CancellationToken ct = default);
+
+    /// <summary>Record an incoming or outgoing call (called by webhook).</summary>
+    Task RecordCallAsync(string phoneNumber, string fromNumber, string toNumber, string direction, string status, int durationSeconds, CancellationToken ct = default);
+
+    /// <summary>Get call logs for a container's phone number.</summary>
+    Task<List<CallLog>> GetCallLogsAsync(string containerName, int limit = 50, CancellationToken ct = default);
 }
 
 /// <summary>Info about an assigned Twilio phone number.</summary>
@@ -53,6 +59,19 @@ public class SmsMessage
     public string ToNumber { get; set; } = string.Empty;
     public string Body { get; set; } = string.Empty;
     public string Direction { get; set; } = string.Empty; // "inbound" or "outbound"
+    public DateTime ReceivedAt { get; set; }
+}
+
+/// <summary>Call log record.</summary>
+public class CallLog
+{
+    public int Id { get; set; }
+    public string PhoneNumber { get; set; } = string.Empty;
+    public string FromNumber { get; set; } = string.Empty;
+    public string ToNumber { get; set; } = string.Empty;
+    public string Direction { get; set; } = string.Empty; // "inbound" or "outbound"
+    public string Status { get; set; } = string.Empty; // "ringing", "in-progress", "completed", "no-answer", "busy", "failed"
+    public int DurationSeconds { get; set; }
     public DateTime ReceivedAt { get; set; }
 }
 

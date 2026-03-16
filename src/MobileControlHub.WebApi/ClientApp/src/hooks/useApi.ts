@@ -275,6 +275,7 @@ export const twilioActions = {
   releaseNumber: (containerName: string) => fetchJson('/twilio/numbers/release', { method: 'POST', body: JSON.stringify({ containerName }) }),
   getMessages: (containerName: string, limit = 50) => fetchJson<SmsMessage[]>(`/twilio/sms/${containerName}?limit=${limit}`),
   sendSms: (containerName: string, to: string, body: string) => fetchJson('/twilio/sms/send', { method: 'POST', body: JSON.stringify({ containerName, to, body }) }),
+  getCallLogs: (containerName: string, limit = 50) => fetchJson<import('../types').CallLog[]>(`/twilio/calls/${containerName}?limit=${limit}`),
 };
 
 // Device action helpers

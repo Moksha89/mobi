@@ -96,6 +96,14 @@ public class TwilioController : ControllerBase
         return Ok(ApiResult.Ok("SMS sent successfully"));
     }
 
+    /// <summary>Get call logs for a container's phone number.</summary>
+    [HttpGet("calls/{containerName}")]
+    public async Task<ActionResult<List<CallLog>>> GetCallLogs(string containerName, [FromQuery] int limit = 50, CancellationToken ct = default)
+    {
+        var logs = await _twilioService.GetCallLogsAsync(containerName, limit, ct);
+        return Ok(logs);
+    }
+
     /// <summary>Webhook endpoint for incoming SMS from Twilio.</summary>
     [HttpPost("webhook/sms")]
     [Consumes("application/x-www-form-urlencoded")]
@@ -112,6 +120,53 @@ public class TwilioController : ControllerBase
         }
 
         // Return TwiML empty response
+        return Content("<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response></Response>", "application/xml");
+    }
+
+    /// <summary>Webhook endpoint for incoming voice calls from Twilio.</summary>
+    [HttpPost("webhook/voice")]
+    [Consumes("application/x-www-form-urlencoded")]
+    public async Task<IActionResult> IncomingVoiceWebhook(CancellationToken ct)
+    {
+        var form = await Request.ReadFormAsync(ct);
+        var to = form["To"].ToString();
+        var from = form["From"].ToString();
+        var callStatus = form["CallStatus"].ToString();
+        var direction = form["Direction"].ToString();
+        var durationStr = form["CallDuration"].ToString();
+
+        int.TryParse(durationStr, out var duration);
+
+        if (!string.IsNullOrEmpty(to) && !string.IsNullOrEmpty(from))
+        {
+            var dir = direction.Contains("inbound", StringComparison.OrdinalIgnoreCase) ? "inbound" : "outbound";
+            var phoneNumber = dir == "inbound" ? to : from;
+            await _twilioService.RecordCallAsync(phoneNumber, from, to, dir, callStatus, duration, ct);
+        }
+
+        // Return TwiML response - reject the call since these are virtual numbers
+        // You can customize this to forward calls, play a message, etc.
+        return Content("<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Say>This number is not accepting calls at this time.</Say></Response>", "application/xml");
+    }
+
+    /// <summary>Webhook endpoint for voice call status updates from Twilio.</summary>
+    [HttpPost("webhook/voice/status")]
+    [Consumes("application/x-www-form-urlencoded")]
+    public async Task<IActionResult> VoiceStatusCallback(CancellationToken ct)
+    {
+        var form = await Request.ReadFormAsync(ct);
+        var to = form["To"].ToString();
+        var from = form["From"].ToString();
+        var callStatus = form["CallStatus"].ToString();
+        var durationStr = form["CallDuration"].ToString();
+
+        int.TryParse(durationStr, out var duration);
+
+        if (!string.IsNullOrEmpty(to) && !string.IsNullOrEmpty(from))
+        {
+            await _twilioService.RecordCallAsync(to, from, to, "inbound", callStatus, duration, ct);
+        }
+
         return Content("<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response></Response>", "application/xml");
     }
 }

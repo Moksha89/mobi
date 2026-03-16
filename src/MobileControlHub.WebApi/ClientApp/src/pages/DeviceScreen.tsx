@@ -6,7 +6,7 @@ import {
   Camera, RotateCw, Trash2, Clipboard, Search, Settings, MessageSquare, Phone, Send, RefreshCw
 } from 'lucide-react';
 import { twilioActions } from '../hooks/useApi';
-import type { SmsMessage, TwilioNumberInfo } from '../types';
+import type { SmsMessage, TwilioNumberInfo, CallLog } from '../types';
 
 const API_BASE = '/api';
 
@@ -47,6 +47,11 @@ function DeviceScreen() {
   const [smsError, setSmsError] = useState<string | null>(null);
   const [smsSuccess, setSmsSuccess] = useState<string | null>(null);
 
+  // Call log state
+  const [showCallLogs, setShowCallLogs] = useState(false);
+  const [callLogs, setCallLogs] = useState<CallLog[]>([]);
+  const [callLogsLoading, setCallLogsLoading] = useState(false);
+
   // Touch tracking refs to avoid stale closure issues
   const swipeStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const isDraggingRef = useRef(false);
@@ -81,6 +86,23 @@ function DeviceScreen() {
       setSmsMessages(msgs);
     } catch { setSmsMessages([]); }
     setSmsLoading(false);
+  };
+
+  const loadCallLogs = async () => {
+    if (!containerName) return;
+    setCallLogsLoading(true);
+    try {
+      const logs = await twilioActions.getCallLogs(containerName);
+      setCallLogs(logs);
+    } catch { setCallLogs([]); }
+    setCallLogsLoading(false);
+  };
+
+  const formatDuration = (seconds: number): string => {
+    if (seconds === 0) return '0s';
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
   };
 
   const handleSmsSend = async () => {
@@ -600,6 +622,69 @@ function DeviceScreen() {
                             </span>
                           </div>
                           <div style={{ color: 'var(--text-primary)' }}>{msg.body}</div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Call Logs Panel */}
+          {containerName && phoneInfo && (
+            <div className="control-section">
+              <h4 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Phone size={14} /> Call Logs
+                </span>
+                <button className="ctrl-btn small" onClick={() => { setShowCallLogs(!showCallLogs); if (!showCallLogs) loadCallLogs(); }}>
+                  {showCallLogs ? 'Hide' : 'Show'}
+                </button>
+              </h4>
+              {showCallLogs && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{callLogs.length} call(s)</span>
+                    <button className="ctrl-btn small" onClick={loadCallLogs} disabled={callLogsLoading}>
+                      <RefreshCw size={10} /> Refresh
+                    </button>
+                  </div>
+                  <div style={{ maxHeight: 200, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {callLogsLoading ? (
+                      <div style={{ textAlign: 'center', padding: 12, color: 'var(--text-muted)', fontSize: 11 }}>Loading...</div>
+                    ) : callLogs.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: 12, color: 'var(--text-muted)', fontSize: 11 }}>
+                        No calls yet. Incoming calls to {phoneInfo.phoneNumber} will appear here.
+                      </div>
+                    ) : (
+                      callLogs.map(call => (
+                        <div key={call.id} style={{
+                          padding: '6px 8px', borderRadius: 6, fontSize: 11,
+                          background: call.direction === 'inbound' ? 'rgba(166,227,161,0.1)' : 'rgba(137,180,250,0.1)',
+                          border: `1px solid ${call.direction === 'inbound' ? 'rgba(166,227,161,0.2)' : 'rgba(137,180,250,0.2)'}`,
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                            <span style={{ fontWeight: 600, color: call.direction === 'inbound' ? '#a6e3a1' : '#89b4fa' }}>
+                              {call.direction === 'inbound' ? `Incoming: ${call.fromNumber}` : `Outgoing: ${call.toNumber}`}
+                            </span>
+                            <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>
+                              {new Date(call.receivedAt).toLocaleTimeString()}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', gap: 8, color: 'var(--text-secondary)', fontSize: 10 }}>
+                            <span style={{
+                              padding: '1px 4px', borderRadius: 3,
+                              background: call.status === 'completed' ? 'rgba(166,227,161,0.2)' :
+                                call.status === 'no-answer' ? 'rgba(249,226,175,0.2)' :
+                                'rgba(243,139,168,0.2)',
+                              color: call.status === 'completed' ? '#a6e3a1' :
+                                call.status === 'no-answer' ? '#f9e2af' : '#f38ba8'
+                            }}>
+                              {call.status}
+                            </span>
+                            {call.durationSeconds > 0 && <span>Duration: {formatDuration(call.durationSeconds)}</span>}
+                          </div>
                         </div>
                       ))
                     )}

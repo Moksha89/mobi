@@ -61,11 +61,18 @@ public class TwilioService : ITwilioService
 
             var numberToBuy = availableNumbers.First();
 
-            // Purchase the number
+            // Determine webhook base URL from environment or default
+            var webhookBase = Environment.GetEnvironmentVariable("WEBHOOK_BASE_URL") ?? "http://69.197.142.77:5000";
+            var smsWebhookUrl = new Uri($"{webhookBase}/api/twilio/webhook/sms");
+            var voiceWebhookUrl = new Uri($"{webhookBase}/api/twilio/webhook/voice");
+
+            // Purchase the number with webhook URLs configured
             var purchased = await IncomingPhoneNumberResource.CreateAsync(
                 phoneNumber: new PhoneNumber(numberToBuy.PhoneNumber.ToString()),
                 friendlyName: $"MCH-{containerName}",
+                smsUrl: smsWebhookUrl,
                 smsMethod: Twilio.Http.HttpMethod.Post,
+                voiceUrl: voiceWebhookUrl,
                 voiceMethod: Twilio.Http.HttpMethod.Post
             );
 
@@ -288,6 +295,57 @@ public class TwilioService : ITwilioService
         await _logService.LogInfoAsync(
             $"Received SMS on {toNumber} from {fromNumber}: {(body.Length > 50 ? body[..50] + "..." : body)}",
             category: "Twilio");
+    }
+
+    public async Task RecordCallAsync(string phoneNumber, string fromNumber, string toNumber, string direction, string status, int durationSeconds, CancellationToken ct = default)
+    {
+        using var conn = _db.GetConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"INSERT INTO CallLogs (PhoneNumber, FromNumber, ToNumber, Direction, Status, DurationSeconds, ReceivedAt)
+                           VALUES (@phone, @from, @to, @direction, @status, @duration, datetime('now'))";
+        cmd.Parameters.AddWithValue("@phone", phoneNumber);
+        cmd.Parameters.AddWithValue("@from", fromNumber);
+        cmd.Parameters.AddWithValue("@to", toNumber);
+        cmd.Parameters.AddWithValue("@direction", direction);
+        cmd.Parameters.AddWithValue("@status", status);
+        cmd.Parameters.AddWithValue("@duration", durationSeconds);
+        await cmd.ExecuteNonQueryAsync(ct);
+
+        await _logService.LogInfoAsync(
+            $"Call logged: {direction} {status} on {phoneNumber} from={fromNumber} to={toNumber} duration={durationSeconds}s",
+            category: "Twilio");
+    }
+
+    public async Task<List<CallLog>> GetCallLogsAsync(string containerName, int limit = 50, CancellationToken ct = default)
+    {
+        var numberInfo = await GetNumberForContainerAsync(containerName, ct);
+        if (numberInfo == null) return new List<CallLog>();
+
+        var logs = new List<CallLog>();
+        using var conn = _db.GetConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"SELECT Id, PhoneNumber, FromNumber, ToNumber, Direction, Status, DurationSeconds, ReceivedAt
+                           FROM CallLogs WHERE PhoneNumber = @phone
+                           ORDER BY ReceivedAt DESC LIMIT @limit";
+        cmd.Parameters.AddWithValue("@phone", numberInfo.PhoneNumber);
+        cmd.Parameters.AddWithValue("@limit", limit);
+
+        using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            logs.Add(new CallLog
+            {
+                Id = reader.GetInt32(0),
+                PhoneNumber = reader.GetString(1),
+                FromNumber = reader.GetString(2),
+                ToNumber = reader.GetString(3),
+                Direction = reader.GetString(4),
+                Status = reader.GetString(5),
+                DurationSeconds = reader.GetInt32(6),
+                ReceivedAt = DateTime.Parse(reader.GetString(7))
+            });
+        }
+        return logs;
     }
 
     public async Task<TwilioAccountInfo> GetAccountInfoAsync(CancellationToken ct = default)

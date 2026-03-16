@@ -57,6 +57,17 @@ export interface SmsMessage {
   receivedAt: string;
 }
 
+export interface CallLog {
+  id: number;
+  phoneNumber: string;
+  fromNumber: string;
+  toNumber: string;
+  direction: string;
+  status: string;
+  durationSeconds: number;
+  receivedAt: string;
+}
+
 export enum DeviceConnectionState {
   Unknown = 0,
   Online = 1,
