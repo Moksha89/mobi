@@ -3,6 +3,7 @@ using MobileControlHub.Domain.Interfaces;
 using MobileControlHub.Infrastructure.Helpers;
 using MobileControlHub.WebApi.Models;
 
+
 namespace MobileControlHub.WebApi.Controllers;
 
 /// <summary>
@@ -18,6 +19,7 @@ public class VirtualDevicesController : ControllerBase
     private readonly IConfigurationService _configService;
     private readonly ILogService _logService;
     private readonly IDeviceMonitorService _monitor;
+    private readonly ITwilioService _twilioService;
 
     private const int BaseAdbPort = 5555;
     private const string RedroidImage = "aureliolo/redroid:14.0.0_amd64_with_gapps";
@@ -26,12 +28,14 @@ public class VirtualDevicesController : ControllerBase
         IAdbService adbService,
         IConfigurationService configService,
         ILogService logService,
-        IDeviceMonitorService monitor)
+        IDeviceMonitorService monitor,
+        ITwilioService twilioService)
     {
         _adbService = adbService;
         _configService = configService;
         _logService = logService;
         _monitor = monitor;
+        _twilioService = twilioService;
     }
 
     /// <summary>Get all virtual devices (Redroid containers) and their status.</summary>
@@ -52,6 +56,9 @@ public class VirtualDevicesController : ControllerBase
             var device = devices.FirstOrDefault(d =>
                 d.SerialNumber == localSerial || d.SerialNumber == remoteSerial);
 
+            // Look up assigned phone number
+            var numberInfo = await _twilioService.GetNumberForContainerAsync(c.ContainerName, ct);
+
             result.Add(new VirtualDeviceInfo
             {
                 Host = "localhost",
@@ -63,6 +70,7 @@ public class VirtualDevicesController : ControllerBase
                 Model = device?.Model ?? "Redroid Virtual Android",
                 ContainerName = c.ContainerName,
                 ContainerStatus = c.Status,
+                PhoneNumber = numberInfo?.PhoneNumber,
             });
         }
 
@@ -115,10 +123,19 @@ public class VirtualDevicesController : ControllerBase
 
         await _monitor.RefreshNowAsync(ct);
 
-        await _logService.LogInfoAsync($"Created virtual device '{name}' on port {adbPort} (container: {containerName})",
+        // Auto-provision a Twilio US phone number for this device
+        string? phoneNumber = null;
+        if (_twilioService.IsConfigured)
+        {
+            var number = await _twilioService.ProvisionNumberAsync(containerName, ct);
+            phoneNumber = number?.PhoneNumber;
+        }
+
+        var phoneMsg = phoneNumber != null ? $" with phone {phoneNumber}" : "";
+        await _logService.LogInfoAsync($"Created virtual device '{name}' on port {adbPort} (container: {containerName}){phoneMsg}",
             category: "VirtualDevices");
 
-        return Ok(ApiResult.Ok($"Created virtual device '{name}' on port {adbPort}"));
+        return Ok(ApiResult.Ok($"Created virtual device '{name}' on port {adbPort}{phoneMsg}"));
     }
 
     /// <summary>Remove a virtual Android device (stop and remove Docker container).</summary>
@@ -145,6 +162,12 @@ public class VirtualDevicesController : ControllerBase
             await ProcessRunner.RunAsync("/bin/bash",
                 $"-c \"docker rm -f {request.ContainerName}\"",
                 timeoutMs: 15000, ct: ct);
+        }
+
+        // Release the Twilio number if assigned
+        if (_twilioService.IsConfigured)
+        {
+            await _twilioService.ReleaseNumberAsync(request.ContainerName, ct);
         }
 
         await _monitor.RefreshNowAsync(ct);

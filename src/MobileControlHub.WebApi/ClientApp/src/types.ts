@@ -27,6 +27,34 @@ export interface VirtualDeviceInfo {
   model: string;
   containerName: string;
   containerStatus: string;
+  phoneNumber?: string;
+}
+
+export interface TwilioAccountInfo {
+  isConfigured: boolean;
+  accountSid: string;
+  friendlyName: string;
+  balance: string;
+  currency: string;
+  activeNumbers: number;
+}
+
+export interface TwilioNumberInfo {
+  phoneNumber: string;
+  containerName: string;
+  friendlyName: string;
+  twilioSid: string;
+  assignedAt: string;
+}
+
+export interface SmsMessage {
+  id: number;
+  phoneNumber: string;
+  fromNumber: string;
+  toNumber: string;
+  body: string;
+  direction: string;
+  receivedAt: string;
 }
 
 export enum DeviceConnectionState {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { SystemStatus, AndroidDevice, ScrcpySession, LogEntry, AppConfiguration, VpsConfiguration } from '../types';
+import type { SystemStatus, AndroidDevice, ScrcpySession, LogEntry, AppConfiguration, VpsConfiguration, TwilioAccountInfo, SmsMessage } from '../types';
 
 const API_BASE = '/api';
 
@@ -264,6 +264,17 @@ export const virtualDeviceActions = {
     fetchJson('/virtual-devices/remove', { method: 'POST', body: JSON.stringify({ containerName }) }),
   restart: (containerName: string) =>
     fetchJson('/virtual-devices/restart', { method: 'POST', body: JSON.stringify({ containerName }) }),
+};
+
+// Twilio actions
+export const twilioActions = {
+  getStatus: () => fetchJson<TwilioAccountInfo>('/twilio/status'),
+  getNumbers: () => fetchJson<import('../types').TwilioNumberInfo[]>('/twilio/numbers'),
+  getNumberForContainer: (containerName: string) => fetchJson<import('../types').TwilioNumberInfo>(`/twilio/numbers/${containerName}`),
+  provisionNumber: (containerName: string) => fetchJson('/twilio/numbers/provision', { method: 'POST', body: JSON.stringify({ containerName }) }),
+  releaseNumber: (containerName: string) => fetchJson('/twilio/numbers/release', { method: 'POST', body: JSON.stringify({ containerName }) }),
+  getMessages: (containerName: string, limit = 50) => fetchJson<SmsMessage[]>(`/twilio/sms/${containerName}?limit=${limit}`),
+  sendSms: (containerName: string, to: string, body: string) => fetchJson('/twilio/sms/send', { method: 'POST', body: JSON.stringify({ containerName, to, body }) }),
 };
 
 // Device action helpers

@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useDevices, deviceActions, sessionActions, virtualDeviceActions } from '../hooks/useApi';
+import { useDevices, deviceActions, sessionActions, virtualDeviceActions, twilioActions } from '../hooks/useApi';
 import { DeviceConnectionState } from '../types';
-import type { VirtualDeviceInfo } from '../types';
+import type { VirtualDeviceInfo, SmsMessage } from '../types';
 import {
   Smartphone, RefreshCw, Monitor, RotateCcw, Camera,
   Power, Copy, Search, AlertTriangle, Edit2, Eye, Cloud,
-  Plus, Trash2, RotateCw, Play, Square
+  Plus, Trash2, RotateCw, Play, Square, Phone, MessageSquare, Send, X
 } from 'lucide-react';
 
 const stateLabel = (s: DeviceConnectionState) =>
@@ -48,6 +48,12 @@ function Devices() {
   const [removing, setRemoving] = useState<string | null>(null);
   const [cloudDevices, setCloudDevices] = useState<VirtualDeviceInfo[]>([]);
   const [showCloudPanel, setShowCloudPanel] = useState(true);
+  const [smsContainer, setSmsContainer] = useState<string | null>(null);
+  const [smsMessages, setSmsMessages] = useState<SmsMessage[]>([]);
+  const [smsLoading, setSmsLoading] = useState(false);
+  const [sendTo, setSendTo] = useState('');
+  const [sendBody, setSendBody] = useState('');
+  const [sending, setSending] = useState(false);
 
   const loadCloudDevices = useCallback(async () => {
     try {
@@ -125,6 +131,33 @@ function Devices() {
       await loadCloudDevices();
       await refreshDevices();
     });
+  };
+
+  const openSmsInbox = async (containerName: string) => {
+    setSmsContainer(containerName);
+    setSmsLoading(true);
+    try {
+      const msgs = await twilioActions.getMessages(containerName);
+      setSmsMessages(msgs);
+    } catch { setSmsMessages([]); }
+    setSmsLoading(false);
+  };
+
+  const handleSendSms = async () => {
+    if (!smsContainer || !sendTo || !sendBody) return;
+    setSending(true);
+    try {
+      await twilioActions.sendSms(smsContainer, sendTo, sendBody);
+      setSendTo('');
+      setSendBody('');
+      const msgs = await twilioActions.getMessages(smsContainer);
+      setSmsMessages(msgs);
+      setActionMsg({ type: 'success', text: 'SMS sent' });
+      setTimeout(() => setActionMsg(null), 3000);
+    } catch (e) {
+      setActionMsg({ type: 'error', text: `Send failed: ${(e as Error).message}` });
+    }
+    setSending(false);
   };
 
   if (loading && devices.length === 0) {
@@ -213,6 +246,12 @@ function Devices() {
                     <span>Serial:</span><span style={{ fontFamily: 'monospace' }}>{cd.serial}</span>
                     <span>Android:</span><span>{cd.androidVersion}</span>
                     <span>Status:</span><span>{cd.containerStatus}</span>
+                    {cd.phoneNumber && (
+                      <><span>Phone:</span><span style={{ fontFamily: 'monospace', color: '#a6e3a1', fontWeight: 'bold' }}>
+                        <Phone size={10} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 3 }} />
+                        {cd.phoneNumber}
+                      </span></>
+                    )}
                   </div>
                   <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                     {cd.connected ? (
@@ -238,6 +277,14 @@ function Devices() {
                       title="Restart container">
                       <RotateCw size={10} /> Restart
                     </button>
+                    {cd.phoneNumber && (
+                      <button className="btn btn-sm btn-ghost"
+                        style={{ color: '#89b4fa' }}
+                        onClick={() => openSmsInbox(cd.containerName)}
+                        title="View SMS inbox">
+                        <MessageSquare size={10} /> SMS
+                      </button>
+                    )}
                     <button className="btn btn-sm btn-ghost"
                       style={{ color: '#f38ba8' }}
                       onClick={() => handleRemove(cd.containerName)}
@@ -252,6 +299,91 @@ function Devices() {
           )
         )}
       </div>
+
+      {/* SMS Inbox Modal */}
+      {smsContainer && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000
+        }} onClick={() => setSmsContainer(null)}>
+          <div style={{
+            background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12,
+            padding: 24, width: 500, maxWidth: '95vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column'
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <MessageSquare size={18} /> SMS Inbox - {smsContainer}
+              </h3>
+              <button className="btn btn-sm btn-ghost" onClick={() => setSmsContainer(null)}>
+                <X size={14} />
+              </button>
+            </div>
+
+            {/* Send SMS form */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              <input
+                value={sendTo}
+                onChange={e => setSendTo(e.target.value)}
+                placeholder="To: +1234567890"
+                style={{ flex: '0 0 140px', fontSize: 12 }}
+              />
+              <input
+                value={sendBody}
+                onChange={e => setSendBody(e.target.value)}
+                placeholder="Message..."
+                style={{ flex: 1, fontSize: 12 }}
+                onKeyDown={e => e.key === 'Enter' && handleSendSms()}
+              />
+              <button className="btn btn-sm btn-primary" onClick={handleSendSms} disabled={sending || !sendTo || !sendBody}>
+                <Send size={12} /> {sending ? '...' : 'Send'}
+              </button>
+            </div>
+
+            {/* Messages list */}
+            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {smsLoading ? (
+                <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>Loading messages...</div>
+              ) : smsMessages.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>
+                  <MessageSquare size={32} style={{ opacity: 0.3, marginBottom: 8 }} />
+                  <p style={{ margin: 0 }}>No messages yet. Send an SMS to this number to see it here.</p>
+                </div>
+              ) : (
+                smsMessages.map(msg => (
+                  <div key={msg.id} style={{
+                    padding: '8px 12px', borderRadius: 8,
+                    background: msg.direction === 'inbound' ? 'var(--bg)' : '#1e3a5f',
+                    border: '1px solid var(--border)',
+                    alignSelf: msg.direction === 'inbound' ? 'flex-start' : 'flex-end',
+                    maxWidth: '85%'
+                  }}>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>
+                      {msg.direction === 'inbound' ? `From: ${msg.fromNumber}` : `To: ${msg.toNumber}`}
+                      {' '}&middot;{' '}
+                      {new Date(msg.receivedAt).toLocaleString()}
+                    </div>
+                    <div style={{ fontSize: 13 }}>{msg.body}</div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="btn btn-sm btn-ghost" onClick={async () => {
+                setSmsLoading(true);
+                try {
+                  const msgs = await twilioActions.getMessages(smsContainer);
+                  setSmsMessages(msgs);
+                } catch { /* ignore */ }
+                setSmsLoading(false);
+              }}>
+                <RefreshCw size={12} /> Refresh
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create Cloud Device Modal */}
       {showCreateModal && (

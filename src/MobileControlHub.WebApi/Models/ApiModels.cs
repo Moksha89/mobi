@@ -149,6 +149,7 @@ public class VirtualDeviceInfo
     public string Model { get; set; } = string.Empty;
     public string ContainerName { get; set; } = string.Empty;
     public string ContainerStatus { get; set; } = string.Empty;
+    public string? PhoneNumber { get; set; }
 }
 
 /// <summary>Request to create a new virtual Android device.</summary>
@@ -163,6 +164,26 @@ public class CreateVirtualDeviceRequest
 public class RemoveVirtualDeviceRequest
 {
     public string ContainerName { get; set; } = string.Empty;
+}
+
+/// <summary>Request to provision a Twilio number for a container.</summary>
+public class ProvisionNumberRequest
+{
+    public string ContainerName { get; set; } = string.Empty;
+}
+
+/// <summary>Request to release a Twilio number from a container.</summary>
+public class ReleaseNumberRequest
+{
+    public string ContainerName { get; set; } = string.Empty;
+}
+
+/// <summary>Request to send an SMS from a container's number.</summary>
+public class SendSmsRequest
+{
+    public string ContainerName { get; set; } = string.Empty;
+    public string To { get; set; } = string.Empty;
+    public string Body { get; set; } = string.Empty;
 }
 
 /// <summary>Generic API result wrapper.</summary>

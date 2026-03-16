@@ -75,6 +75,28 @@ public class DatabaseManager : IDisposable
                 Notes TEXT
             );", ct);
 
+        // Create Twilio phone number assignments table
+        await ExecuteNonQueryAsync(connection, @"
+            CREATE TABLE IF NOT EXISTS TwilioNumbers (
+                PhoneNumber TEXT PRIMARY KEY NOT NULL,
+                ContainerName TEXT NOT NULL UNIQUE,
+                FriendlyName TEXT NOT NULL,
+                TwilioSid TEXT NOT NULL,
+                AssignedAt TEXT NOT NULL DEFAULT (datetime('now'))
+            );", ct);
+
+        // Create SMS messages table
+        await ExecuteNonQueryAsync(connection, @"
+            CREATE TABLE IF NOT EXISTS SmsMessages (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                PhoneNumber TEXT NOT NULL,
+                FromNumber TEXT NOT NULL,
+                ToNumber TEXT NOT NULL,
+                Body TEXT NOT NULL DEFAULT '',
+                Direction TEXT NOT NULL DEFAULT 'inbound',
+                ReceivedAt TEXT NOT NULL DEFAULT (datetime('now'))
+            );", ct);
+
         // Create indexes for common queries
         await ExecuteNonQueryAsync(connection,
             "CREATE INDEX IF NOT EXISTS IX_LogEntries_Timestamp ON LogEntries(Timestamp DESC);", ct);
@@ -82,6 +104,12 @@ public class DatabaseManager : IDisposable
             "CREATE INDEX IF NOT EXISTS IX_LogEntries_Level ON LogEntries(Level);", ct);
         await ExecuteNonQueryAsync(connection,
             "CREATE INDEX IF NOT EXISTS IX_LogEntries_DeviceSerial ON LogEntries(DeviceSerial);", ct);
+        await ExecuteNonQueryAsync(connection,
+            "CREATE INDEX IF NOT EXISTS IX_SmsMessages_PhoneNumber ON SmsMessages(PhoneNumber);", ct);
+        await ExecuteNonQueryAsync(connection,
+            "CREATE INDEX IF NOT EXISTS IX_SmsMessages_ReceivedAt ON SmsMessages(ReceivedAt DESC);", ct);
+        await ExecuteNonQueryAsync(connection,
+            "CREATE INDEX IF NOT EXISTS IX_TwilioNumbers_Container ON TwilioNumbers(ContainerName);", ct);
     }
 
     private static async Task ExecuteNonQueryAsync(SqliteConnection connection, string sql, CancellationToken ct)

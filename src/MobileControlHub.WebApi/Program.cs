@@ -37,6 +37,7 @@ builder.Services.AddSingleton<IAdbService, AdbService>();
 builder.Services.AddSingleton<IScrcpyService, ScrcpyService>();
 builder.Services.AddSingleton<IRustDeskService, RustDeskService>();
 builder.Services.AddSingleton<IDeviceMonitorService, DeviceMonitorService>();
+builder.Services.AddSingleton<ITwilioService, TwilioService>();
 
 // Serve static files (React build output)
 builder.Services.AddDirectoryBrowser();
