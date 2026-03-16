@@ -480,8 +480,8 @@ function Devices() {
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       {gi.state === 'ONLINE' && gi.webrtcUrl && (
                         <button className="btn btn-sm btn-primary"
-                          onClick={() => window.open(`https://${gi.streamerFqdn}`, '_blank')}
-                          title="Open Genymotion device in browser">
+                          onClick={() => window.location.href = `/genymotion/${gi.uuid}/screen`}
+                          title="Open Genymotion device screen viewer">
                           <Eye size={10} /> View Screen
                         </button>
                       )}

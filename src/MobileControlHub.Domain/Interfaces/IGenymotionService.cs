@@ -23,6 +23,9 @@ public interface IGenymotionService
 
     /// <summary>Stop and destroy a disposable instance.</summary>
     Task<bool> StopInstanceAsync(string instanceUuid, CancellationToken ct = default);
+
+    /// <summary>Get a WebRTC access token for connecting to an instance's screen via the web player.</summary>
+    Task<string?> GetAccessTokenAsync(string instanceUuid, CancellationToken ct = default);
 }
 
 /// <summary>A Genymotion recipe (device template).</summary>

@@ -291,6 +291,8 @@ export const genymotionActions = {
     ),
   stopInstance: (uuid: string) =>
     fetchJson('/genymotion/instances/' + uuid + '/stop', { method: 'POST' }),
+  getAccessToken: (uuid: string) =>
+    fetchJson<{ accessToken: string }>('/genymotion/instances/' + uuid + '/access-token', { method: 'POST' }),
 };
 
 // Device action helpers

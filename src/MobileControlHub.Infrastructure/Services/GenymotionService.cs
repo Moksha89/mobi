@@ -173,6 +173,35 @@ public class GenymotionService : IGenymotionService
         }
     }
 
+    public async Task<string?> GetAccessTokenAsync(string instanceUuid, CancellationToken ct = default)
+    {
+        if (!IsConfigured) return null;
+
+        try
+        {
+            var payload = new { instance_uuid = instanceUuid };
+            var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+            var response = await _http.PostAsync("v1/instances/access-token", content, ct);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errBody = await response.Content.ReadAsStringAsync(ct);
+                _logger.LogError("Failed to get Genymotion access token for {Uuid}: {Status} {Body}",
+                    instanceUuid, response.StatusCode, errBody);
+                return null;
+            }
+
+            var json = await response.Content.ReadAsStringAsync(ct);
+            var data = JsonSerializer.Deserialize<AccessTokenResponse>(json, JsonOpts);
+            return data?.AccessToken;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get Genymotion access token for {Uuid}", instanceUuid);
+            return null;
+        }
+    }
+
     // --- Internal models for JSON deserialization ---
 
     private static GenymotionRecipe MapRecipe(RawRecipe r)
@@ -324,6 +353,12 @@ public class GenymotionService : IGenymotionService
         public int Width { get; set; }
         public int Height { get; set; }
         public int Density { get; set; }
+    }
+
+    private class AccessTokenResponse
+    {
+        [JsonPropertyName("access_token")]
+        public string? AccessToken { get; set; }
     }
 
     private class RawOsImage

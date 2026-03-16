@@ -106,6 +106,20 @@ public class GenymotionController : ControllerBase
         });
     }
 
+    /// <summary>Get a WebRTC access token for connecting to an instance's screen via the Genymotion web player.</summary>
+    [HttpPost("instances/{uuid}/access-token")]
+    public async Task<ActionResult> GetAccessToken(string uuid, CancellationToken ct)
+    {
+        if (!_genyService.IsConfigured)
+            return BadRequest(ApiResult.Fail("Genymotion API token not configured."));
+
+        var token = await _genyService.GetAccessTokenAsync(uuid, ct);
+        if (token == null)
+            return BadRequest(ApiResult.Fail("Failed to get access token. Instance may not be online."));
+
+        return Ok(new { accessToken = token });
+    }
+
     /// <summary>Stop and destroy a Genymotion instance.</summary>
     [HttpPost("instances/{uuid}/stop")]
     public async Task<ActionResult<ApiResult>> StopInstance(string uuid, CancellationToken ct)
