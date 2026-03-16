@@ -68,6 +68,42 @@ export interface CallLog {
   receivedAt: string;
 }
 
+export interface GenymotionRecipe {
+  uuid: string;
+  name: string;
+  description: string;
+  androidVersion: string;
+  apiLevel: number;
+  formFactor: string;
+  cpuCount: number;
+  ramMb: number;
+  diskMb: number;
+  screenWidth: number;
+  screenHeight: number;
+  screenDensity: number;
+  isOfficial: boolean;
+}
+
+export interface GenymotionInstance {
+  uuid: string;
+  name: string;
+  state: string;
+  recipeUuid: string;
+  recipeName: string;
+  androidVersion: string;
+  formFactor: string;
+  cpuCount: number;
+  ramMb: number;
+  screenWidth: number;
+  screenHeight: number;
+  screenDensity: number;
+  webrtcUrl: string;
+  adbUrl: string;
+  streamerFqdn: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export enum DeviceConnectionState {
   Unknown = 0,
   Online = 1,

@@ -38,6 +38,7 @@ builder.Services.AddSingleton<IScrcpyService, ScrcpyService>();
 builder.Services.AddSingleton<IRustDeskService, RustDeskService>();
 builder.Services.AddSingleton<IDeviceMonitorService, DeviceMonitorService>();
 builder.Services.AddSingleton<ITwilioService, TwilioService>();
+builder.Services.AddSingleton<IGenymotionService, GenymotionService>();
 
 // Serve static files (React build output)
 builder.Services.AddDirectoryBrowser();

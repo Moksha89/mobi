@@ -186,6 +186,14 @@ public class SendSmsRequest
     public string Body { get; set; } = string.Empty;
 }
 
+/// <summary>Request to start a Genymotion virtual device instance.</summary>
+public class StartGenymotionRequest
+{
+    public string RecipeUuid { get; set; } = string.Empty;
+    public string InstanceName { get; set; } = string.Empty;
+    public bool AssignPhoneNumber { get; set; } = true;
+}
+
 /// <summary>Generic API result wrapper.</summary>
 public class ApiResult
 {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { SystemStatus, AndroidDevice, ScrcpySession, LogEntry, AppConfiguration, VpsConfiguration, TwilioAccountInfo, SmsMessage } from '../types';
+import type { SystemStatus, AndroidDevice, ScrcpySession, LogEntry, AppConfiguration, VpsConfiguration, TwilioAccountInfo, SmsMessage, GenymotionRecipe, GenymotionInstance } from '../types';
 
 const API_BASE = '/api';
 
@@ -276,6 +276,21 @@ export const twilioActions = {
   getMessages: (containerName: string, limit = 50) => fetchJson<SmsMessage[]>(`/twilio/sms/${containerName}?limit=${limit}`),
   sendSms: (containerName: string, to: string, body: string) => fetchJson('/twilio/sms/send', { method: 'POST', body: JSON.stringify({ containerName, to, body }) }),
   getCallLogs: (containerName: string, limit = 50) => fetchJson<import('../types').CallLog[]>(`/twilio/calls/${containerName}?limit=${limit}`),
+};
+
+// Genymotion actions
+export const genymotionActions = {
+  getStatus: () => fetchJson<{ isConfigured: boolean }>('/genymotion/status'),
+  getRecipes: () => fetchJson<GenymotionRecipe[]>('/genymotion/recipes'),
+  getInstances: () => fetchJson<GenymotionInstance[]>('/genymotion/instances'),
+  getInstance: (uuid: string) => fetchJson<GenymotionInstance>(`/genymotion/instances/${uuid}`),
+  startInstance: (recipeUuid: string, instanceName?: string, assignPhoneNumber = true) =>
+    fetchJson<{ success: boolean; message: string; instance: GenymotionInstance; phoneNumber?: string }>(
+      '/genymotion/instances/start',
+      { method: 'POST', body: JSON.stringify({ recipeUuid, instanceName: instanceName || '', assignPhoneNumber }) }
+    ),
+  stopInstance: (uuid: string) =>
+    fetchJson('/genymotion/instances/' + uuid + '/stop', { method: 'POST' }),
 };
 
 // Device action helpers

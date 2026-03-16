@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useDevices, deviceActions, sessionActions, virtualDeviceActions, twilioActions } from '../hooks/useApi';
+import { useDevices, deviceActions, sessionActions, virtualDeviceActions, twilioActions, genymotionActions } from '../hooks/useApi';
 import { DeviceConnectionState } from '../types';
-import type { VirtualDeviceInfo, SmsMessage } from '../types';
+import type { VirtualDeviceInfo, SmsMessage, GenymotionRecipe, GenymotionInstance } from '../types';
 import {
   Smartphone, RefreshCw, Monitor, RotateCcw, Camera,
   Power, Copy, Search, AlertTriangle, Edit2, Eye, Cloud,
-  Plus, Trash2, RotateCw, Play, Square, Phone, MessageSquare, Send, X
+  Plus, Trash2, RotateCw, Play, Square, Phone, MessageSquare, Send, X, Zap, StopCircle, Cpu, HardDrive
 } from 'lucide-react';
 
 const stateLabel = (s: DeviceConnectionState) =>
@@ -55,10 +55,39 @@ function Devices() {
   const [sendBody, setSendBody] = useState('');
   const [sending, setSending] = useState(false);
 
+  // Genymotion state
+  const [genyInstances, setGenyInstances] = useState<GenymotionInstance[]>([]);
+  const [genyRecipes, setGenyRecipes] = useState<GenymotionRecipe[]>([]);
+  const [showGenyPanel, setShowGenyPanel] = useState(true);
+  const [showGenyCreate, setShowGenyCreate] = useState(false);
+  const [genyRecipeSearch, setGenyRecipeSearch] = useState('');
+  const [genyStarting, setGenyStarting] = useState(false);
+  const [genyStopping, setGenyStopping] = useState<string | null>(null);
+  const [genyConfigured, setGenyConfigured] = useState(false);
+  const [genyInstanceName, setGenyInstanceName] = useState('');
+
   const loadCloudDevices = useCallback(async () => {
     try {
       const data = await virtualDeviceActions.getAll();
       setCloudDevices(data);
+    } catch { /* ignore */ }
+  }, []);
+
+  const loadGenyInstances = useCallback(async () => {
+    try {
+      const status = await genymotionActions.getStatus();
+      setGenyConfigured(status.isConfigured);
+      if (status.isConfigured) {
+        const instances = await genymotionActions.getInstances();
+        setGenyInstances(instances);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  const loadGenyRecipes = useCallback(async () => {
+    try {
+      const recipes = await genymotionActions.getRecipes();
+      setGenyRecipes(recipes);
     } catch { /* ignore */ }
   }, []);
 
@@ -67,6 +96,12 @@ function Devices() {
     const id = setInterval(loadCloudDevices, 8000);
     return () => clearInterval(id);
   }, [loadCloudDevices]);
+
+  useEffect(() => {
+    loadGenyInstances();
+    const id = setInterval(loadGenyInstances, 10000);
+    return () => clearInterval(id);
+  }, [loadGenyInstances]);
 
   const filtered = devices.filter(d => {
     const q = search.toLowerCase();
@@ -379,6 +414,199 @@ function Devices() {
                 setSmsLoading(false);
               }}>
                 <RefreshCw size={12} /> Refresh
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Genymotion Cloud Devices Panel */}
+      {genyConfigured && (
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16, marginBottom: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: showGenyPanel ? 12 : 0 }}>
+            <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8, fontSize: 15 }}>
+              <Zap size={18} style={{ color: '#f9e2af' }} />
+              Genymotion Cloud Devices
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 'normal' }}>
+                {genyInstances.length} instance(s)
+              </span>
+            </h3>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-sm btn-success" onClick={() => {
+                setShowGenyCreate(true);
+                if (genyRecipes.length === 0) loadGenyRecipes();
+              }}>
+                <Plus size={12} /> New Device
+              </button>
+              <button className="btn btn-sm btn-ghost" onClick={loadGenyInstances}>
+                <RefreshCw size={12} />
+              </button>
+              <button className="btn btn-sm btn-ghost" onClick={() => setShowGenyPanel(!showGenyPanel)}>
+                {showGenyPanel ? 'Collapse' : 'Expand'}
+              </button>
+            </div>
+          </div>
+
+          {showGenyPanel && (
+            genyInstances.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-muted)' }}>
+                <Zap size={32} style={{ opacity: 0.3, marginBottom: 8 }} />
+                <p style={{ margin: 0 }}>No Genymotion devices running. Click "New Device" to start one.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
+                {genyInstances.map(gi => (
+                  <div key={gi.uuid} style={{
+                    background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8,
+                    padding: 12, display: 'flex', flexDirection: 'column', gap: 8
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Zap size={16} style={{ color: gi.state === 'ONLINE' ? '#a6e3a1' : gi.state === 'CREATING' || gi.state === 'BOOTING' ? '#f9e2af' : '#666' }} />
+                        <strong style={{ fontSize: 13 }}>{gi.name}</strong>
+                      </div>
+                      <span className={`badge ${gi.state === 'ONLINE' ? 'online' : gi.state === 'CREATING' || gi.state === 'BOOTING' ? 'warning' : 'offline'}`} style={{ fontSize: 10 }}>
+                        <span className="badge-dot" />
+                        {gi.state}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'grid', gridTemplateColumns: '80px 1fr', gap: '2px 8px' }}>
+                      <span>Recipe:</span><span>{gi.recipeName}</span>
+                      <span>Android:</span><span>{gi.androidVersion}</span>
+                      <span>CPU/RAM:</span><span>{gi.cpuCount} cores / {gi.ramMb >= 1024 ? `${(gi.ramMb / 1024).toFixed(0)} GB` : `${gi.ramMb} MB`}</span>
+                      <span>Screen:</span><span>{gi.screenWidth}x{gi.screenHeight} @ {gi.screenDensity}dpi</span>
+                      {gi.webrtcUrl && <><span>WebRTC:</span><span style={{ fontFamily: 'monospace', fontSize: 10 }}>{gi.streamerFqdn}</span></>}
+                    </div>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      {gi.state === 'ONLINE' && gi.webrtcUrl && (
+                        <button className="btn btn-sm btn-primary"
+                          onClick={() => window.open(`https://${gi.streamerFqdn}`, '_blank')}
+                          title="Open Genymotion device in browser">
+                          <Eye size={10} /> View Screen
+                        </button>
+                      )}
+                      <button className="btn btn-sm btn-ghost"
+                        style={{ color: '#f38ba8' }}
+                        onClick={async () => {
+                          if (!confirm(`Stop Genymotion device "${gi.name}"? This will destroy the instance.`)) return;
+                          setGenyStopping(gi.uuid);
+                          try {
+                            await genymotionActions.stopInstance(gi.uuid);
+                            setActionMsg({ type: 'success', text: `Stopped ${gi.name}` });
+                            setTimeout(() => setActionMsg(null), 3000);
+                            await loadGenyInstances();
+                          } catch (e) {
+                            setActionMsg({ type: 'error', text: `Stop failed: ${(e as Error).message}` });
+                          } finally {
+                            setGenyStopping(null);
+                          }
+                        }}
+                        disabled={genyStopping === gi.uuid}>
+                        <StopCircle size={10} /> {genyStopping === gi.uuid ? 'Stopping...' : 'Stop'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          )}
+        </div>
+      )}
+
+      {/* Genymotion Create Device Modal */}
+      {showGenyCreate && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000
+        }} onClick={() => !genyStarting && setShowGenyCreate(false)}>
+          <div style={{
+            background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12,
+            padding: 24, width: 600, maxWidth: '95vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column'
+          }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Zap size={18} style={{ color: '#f9e2af' }} /> Start Genymotion Device
+            </h3>
+
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: 'block', marginBottom: 4, fontSize: 13 }}>Instance Name (optional)</label>
+              <input
+                value={genyInstanceName}
+                onChange={e => setGenyInstanceName(e.target.value)}
+                placeholder="e.g., my-test-device"
+                style={{ width: '100%' }}
+              />
+            </div>
+
+            <div style={{ marginBottom: 8 }}>
+              <label style={{ display: 'block', marginBottom: 4, fontSize: 13 }}>Select a Device Recipe</label>
+              <input
+                value={genyRecipeSearch}
+                onChange={e => setGenyRecipeSearch(e.target.value)}
+                placeholder="Search recipes... (e.g., Samsung, Pixel, Android 14)"
+                style={{ width: '100%' }}
+              />
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6, minHeight: 200, maxHeight: '50vh' }}>
+              {genyRecipes.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>Loading recipes...</div>
+              ) : (
+                genyRecipes
+                  .filter(r => {
+                    const q = genyRecipeSearch.toLowerCase();
+                    return !q || r.name.toLowerCase().includes(q) || r.androidVersion.toLowerCase().includes(q) || r.description.toLowerCase().includes(q);
+                  })
+                  .slice(0, 30)
+                  .map(recipe => (
+                    <div key={recipe.uuid} style={{
+                      padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)',
+                      background: 'var(--bg)', cursor: genyStarting ? 'default' : 'pointer',
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      transition: 'border-color 0.15s',
+                    }}
+                      onMouseEnter={e => { if (!genyStarting) (e.currentTarget as HTMLDivElement).style.borderColor = '#a6e3a1'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--border)'; }}
+                      onClick={async () => {
+                        if (genyStarting) return;
+                        setGenyStarting(true);
+                        try {
+                          const result = await genymotionActions.startInstance(recipe.uuid, genyInstanceName || undefined);
+                          setActionMsg({ type: 'success', text: `Started ${result.instance.name}${result.phoneNumber ? ` with phone ${result.phoneNumber}` : ''}` });
+                          setTimeout(() => setActionMsg(null), 5000);
+                          setShowGenyCreate(false);
+                          setGenyInstanceName('');
+                          setGenyRecipeSearch('');
+                          await loadGenyInstances();
+                        } catch (e) {
+                          setActionMsg({ type: 'error', text: `Start failed: ${(e as Error).message}` });
+                        } finally {
+                          setGenyStarting(false);
+                        }
+                      }}>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{recipe.name}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', gap: 12 }}>
+                          <span>Android {recipe.androidVersion}</span>
+                          <span><Cpu size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> {recipe.cpuCount} cores</span>
+                          <span><HardDrive size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> {recipe.ramMb >= 1024 ? `${(recipe.ramMb / 1024).toFixed(0)} GB` : `${recipe.ramMb} MB`}</span>
+                          <span>{recipe.screenWidth}x{recipe.screenHeight}</span>
+                        </div>
+                      </div>
+                      <button className="btn btn-sm btn-success" disabled={genyStarting} style={{ flexShrink: 0 }}>
+                        {genyStarting ? 'Starting...' : 'Start'}
+                      </button>
+                    </div>
+                  ))
+              )}
+            </div>
+
+            <div style={{ marginTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                {genyRecipes.length} recipes available | Powered by Genymotion SaaS
+              </span>
+              <button className="btn btn-ghost" onClick={() => setShowGenyCreate(false)} disabled={genyStarting}>
+                Cancel
               </button>
             </div>
           </div>
