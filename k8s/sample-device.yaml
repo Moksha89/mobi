@@ -1,0 +1,121 @@
+# Sample K8s Cloud Android Device Pod
+# This template is used by CloudPlatformService to create device pods dynamically.
+# Do NOT apply this directly - use the dashboard to create devices.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: android-device-sample
+  namespace: android-cloud
+  labels:
+    app: android-device
+    managed-by: mobile-control-hub
+  annotations:
+    mch/hardware-profile: "samsung-galaxy-s25-ultra"
+    mch/os-image: "android-15-gapps"
+    mch/device-name: "Sample Galaxy S25 Ultra"
+    mch/adb-port: "6555"
+    mch/stream-port: "8800"
+spec:
+  containers:
+    # Main Redroid Android container
+    - name: redroid
+      image: redroid/redroid:15.0.0_64only-latest
+      securityContext:
+        privileged: true
+      ports:
+        - containerPort: 5555
+          name: adb
+      env:
+        - name: androidboot.redroid_width
+          value: "1440"
+        - name: androidboot.redroid_height
+          value: "3120"
+        - name: androidboot.redroid_dpi
+          value: "510"
+        - name: androidboot.redroid_fps
+          value: "60"
+        - name: androidboot.redroid_gpu_mode
+          value: "auto"
+        - name: ro.product.model
+          value: "SM-S938U"
+        - name: ro.product.brand
+          value: "samsung"
+        - name: ro.product.manufacturer
+          value: "samsung"
+        - name: ro.product.device
+          value: "dm3q"
+      resources:
+        requests:
+          cpu: "4"
+          memory: "12Gi"
+        limits:
+          cpu: "8"
+          memory: "16Gi"
+      volumeMounts:
+        - name: device-data
+          mountPath: /data
+
+    # scrcpy-web sidecar for WebRTC streaming
+    - name: scrcpy-web
+      image: emptysuns/scrcpy-web:v0.1
+      ports:
+        - containerPort: 8000
+          name: web
+      env:
+        - name: DEVICE_HOST
+          value: "localhost"
+        - name: DEVICE_PORT
+          value: "5555"
+      resources:
+        requests:
+          cpu: "500m"
+          memory: "256Mi"
+        limits:
+          cpu: "1"
+          memory: "512Mi"
+
+  volumes:
+    - name: device-data
+      persistentVolumeClaim:
+        claimName: android-device-sample-data
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: android-device-sample-data
+  namespace: android-cloud
+  labels:
+    app: android-device
+    managed-by: mobile-control-hub
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 32Gi
+
+---
+# NodePort service to expose ADB and WebRTC streaming
+apiVersion: v1
+kind: Service
+metadata:
+  name: android-device-sample-svc
+  namespace: android-cloud
+  labels:
+    app: android-device
+    managed-by: mobile-control-hub
+spec:
+  type: NodePort
+  selector:
+    app: android-device
+    statefulset.kubernetes.io/pod-name: android-device-sample
+  ports:
+    - name: adb
+      port: 5555
+      targetPort: 5555
+      nodePort: 30555
+    - name: stream
+      port: 8000
+      targetPort: 8000
+      nodePort: 30800

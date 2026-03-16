@@ -39,6 +39,7 @@ builder.Services.AddSingleton<IRustDeskService, RustDeskService>();
 builder.Services.AddSingleton<IDeviceMonitorService, DeviceMonitorService>();
 builder.Services.AddSingleton<ITwilioService, TwilioService>();
 builder.Services.AddSingleton<IGenymotionService, GenymotionService>();
+builder.Services.AddSingleton<ICloudPlatformService, CloudPlatformService>();
 
 // Serve static files (React build output)
 builder.Services.AddDirectoryBrowser();

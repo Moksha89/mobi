@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useDevices, deviceActions, sessionActions, virtualDeviceActions, twilioActions, genymotionActions } from '../hooks/useApi';
+import { useDevices, deviceActions, sessionActions, virtualDeviceActions, twilioActions, genymotionActions, cloudPlatformActions } from '../hooks/useApi';
 import { DeviceConnectionState } from '../types';
-import type { VirtualDeviceInfo, SmsMessage, GenymotionRecipe, GenymotionInstance } from '../types';
+import type { VirtualDeviceInfo, SmsMessage, GenymotionRecipe, GenymotionInstance, HardwareProfile, OsImage, CloudDevice, CloudPlatformStatus } from '../types';
 import {
   Smartphone, RefreshCw, Monitor, RotateCcw, Camera,
   Power, Copy, Search, AlertTriangle, Edit2, Eye, Cloud,
-  Plus, Trash2, RotateCw, Play, Square, Phone, MessageSquare, Send, X, Zap, StopCircle, Cpu, HardDrive
+  Plus, Trash2, RotateCw, Play, Square, Phone, MessageSquare, Send, X, Zap, StopCircle, Cpu, HardDrive,
+  Server, Layers, Database
 } from 'lucide-react';
 
 const stateLabel = (s: DeviceConnectionState) =>
@@ -66,6 +67,22 @@ function Devices() {
   const [genyConfigured, setGenyConfigured] = useState(false);
   const [genyInstanceName, setGenyInstanceName] = useState('');
 
+  // K8s Cloud Platform state
+  const [k8sStatus, setK8sStatus] = useState<CloudPlatformStatus | null>(null);
+  const [k8sDevices, setK8sDevices] = useState<CloudDevice[]>([]);
+  const [k8sProfiles, setK8sProfiles] = useState<HardwareProfile[]>([]);
+  const [k8sImages, setK8sImages] = useState<OsImage[]>([]);
+  const [showK8sPanel, setShowK8sPanel] = useState(true);
+  const [showK8sCreate, setShowK8sCreate] = useState(false);
+  const [k8sProfileSearch, setK8sProfileSearch] = useState('');
+  const [k8sSelectedProfile, setK8sSelectedProfile] = useState<string>('');
+  const [k8sSelectedImage, setK8sSelectedImage] = useState<string>('');
+  const [k8sDeviceName, setK8sDeviceName] = useState('');
+  const [k8sEnableGpu, setK8sEnableGpu] = useState(true);
+  const [k8sPersistStorage, setK8sPersistStorage] = useState(true);
+  const [k8sCreating, setK8sCreating] = useState(false);
+  const [k8sRemoving, setK8sRemoving] = useState<string | null>(null);
+
   const loadCloudDevices = useCallback(async () => {
     try {
       const data = await virtualDeviceActions.getAll();
@@ -91,6 +108,29 @@ function Devices() {
     } catch { /* ignore */ }
   }, []);
 
+  const loadK8sDevices = useCallback(async () => {
+    try {
+      const status = await cloudPlatformActions.getStatus();
+      setK8sStatus(status);
+      if (status.isConfigured) {
+        const devices = await cloudPlatformActions.getDevices();
+        setK8sDevices(devices);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  const loadK8sProfiles = useCallback(async () => {
+    try {
+      const [profiles, images] = await Promise.all([
+        cloudPlatformActions.getProfiles(),
+        cloudPlatformActions.getImages(),
+      ]);
+      setK8sProfiles(profiles);
+      setK8sImages(images);
+      if (images.length > 0) setK8sSelectedImage(images.find(i => i.isDefault)?.id || images[0].id);
+    } catch { /* ignore */ }
+  }, []);
+
   useEffect(() => {
     loadCloudDevices();
     const id = setInterval(loadCloudDevices, 8000);
@@ -102,6 +142,12 @@ function Devices() {
     const id = setInterval(loadGenyInstances, 10000);
     return () => clearInterval(id);
   }, [loadGenyInstances]);
+
+  useEffect(() => {
+    loadK8sDevices();
+    const id = setInterval(loadK8sDevices, 10000);
+    return () => clearInterval(id);
+  }, [loadK8sDevices]);
 
   const filtered = devices.filter(d => {
     const q = search.toLowerCase();
@@ -608,6 +654,285 @@ function Devices() {
               <button className="btn btn-ghost" onClick={() => setShowGenyCreate(false)} disabled={genyStarting}>
                 Cancel
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* K8s Cloud Platform Panel */}
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16, marginBottom: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: showK8sPanel ? 12 : 0 }}>
+          <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8, fontSize: 15 }}>
+            <Server size={18} style={{ color: '#89b4fa' }} />
+            K8s Cloud Platform
+            <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 'normal' }}>
+              {k8sDevices.length} device(s) {k8sStatus?.clusterReachable ? '' : '| Cluster not connected'}
+            </span>
+          </h3>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-sm btn-success" onClick={() => {
+              setShowK8sCreate(true);
+              if (k8sProfiles.length === 0) loadK8sProfiles();
+            }}>
+              <Plus size={12} /> New Device
+            </button>
+            <button className="btn btn-sm btn-ghost" onClick={loadK8sDevices}>
+              <RefreshCw size={12} />
+            </button>
+            <button className="btn btn-sm btn-ghost" onClick={() => setShowK8sPanel(!showK8sPanel)}>
+              {showK8sPanel ? 'Collapse' : 'Expand'}
+            </button>
+          </div>
+        </div>
+
+        {showK8sPanel && (
+          k8sDevices.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-muted)' }}>
+              <Server size={32} style={{ opacity: 0.3, marginBottom: 8 }} />
+              <p style={{ margin: 0 }}>
+                {k8sStatus?.isConfigured
+                  ? 'No K8s devices running. Click "New Device" to create one.'
+                  : 'K8s cluster not configured. Set KUBECONFIG or add cluster credentials in Settings.'}
+              </p>
+              {k8sStatus && k8sStatus.isConfigured && (
+                <p style={{ margin: '8px 0 0', fontSize: 11 }}>
+                  Cluster: {k8sStatus.kubernetesVersion} | Nodes: {k8sStatus.readyNodes}/{k8sStatus.totalNodes}
+                  {k8sStatus.gpuAvailable && ` | GPU: ${k8sStatus.gpuModel}`}
+                </p>
+              )}
+            </div>
+          ) : (
+            <>
+              {k8sStatus && (
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                  <span><Layers size={11} style={{ verticalAlign: 'middle' }} /> K8s {k8sStatus.kubernetesVersion}</span>
+                  <span><Server size={11} style={{ verticalAlign: 'middle' }} /> {k8sStatus.readyNodes}/{k8sStatus.totalNodes} nodes</span>
+                  <span><Cpu size={11} style={{ verticalAlign: 'middle' }} /> {Math.round(k8sStatus.resources.usedCpuMillicores / 10) / 100}/{Math.round(k8sStatus.resources.totalCpuMillicores / 10) / 100} CPU</span>
+                  <span><HardDrive size={11} style={{ verticalAlign: 'middle' }} /> {Math.round(k8sStatus.resources.usedMemoryMb / 1024 * 10) / 10}/{Math.round(k8sStatus.resources.totalMemoryMb / 1024 * 10) / 10} GB RAM</span>
+                  {k8sStatus.gpuAvailable && <span><Database size={11} style={{ verticalAlign: 'middle' }} /> GPU: {k8sStatus.gpuModel}</span>}
+                </div>
+              )}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
+                {k8sDevices.map(kd => (
+                  <div key={kd.id} style={{
+                    background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8,
+                    padding: 12, display: 'flex', flexDirection: 'column', gap: 8
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Server size={16} style={{ color: kd.state === 'Running' ? '#a6e3a1' : kd.state === 'Pending' ? '#f9e2af' : '#666' }} />
+                        <strong style={{ fontSize: 13 }}>{kd.name}</strong>
+                      </div>
+                      <span className={`badge ${kd.state === 'Running' ? 'online' : kd.state === 'Pending' ? 'warning' : 'offline'}`} style={{ fontSize: 10 }}>
+                        <span className="badge-dot" />
+                        {kd.state}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'grid', gridTemplateColumns: '80px 1fr', gap: '2px 8px' }}>
+                      <span>Device:</span><span>{kd.brand} {kd.model}</span>
+                      <span>Android:</span><span>{kd.androidVersion}</span>
+                      <span>CPU/RAM:</span><span>{kd.cpuCores} cores / {kd.ramMb >= 1024 ? `${(kd.ramMb / 1024).toFixed(0)} GB` : `${kd.ramMb} MB`}</span>
+                      <span>Screen:</span><span>{kd.screenWidth}x{kd.screenHeight} @ {kd.screenDpi}dpi</span>
+                      <span>Storage:</span><span>{kd.storageGb} GB {kd.persistentStorage ? '(persistent)' : ''}</span>
+                      {kd.gpuAccelerated && <><span>GPU:</span><span style={{ color: '#a6e3a1' }}>Accelerated</span></>}
+                      {kd.hasGapps && <><span>GApps:</span><span style={{ color: '#a6e3a1' }}>Installed</span></>}
+                      {kd.phoneNumber && (
+                        <><span>Phone:</span><span style={{ fontFamily: 'monospace', color: '#a6e3a1', fontWeight: 'bold' }}>
+                          <Phone size={10} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 3 }} />
+                          {kd.phoneNumber}
+                        </span></>
+                      )}
+                      <span>Uptime:</span><span>{kd.uptimeSeconds > 3600 ? `${Math.floor(kd.uptimeSeconds / 3600)}h ${Math.floor((kd.uptimeSeconds % 3600) / 60)}m` : `${Math.floor(kd.uptimeSeconds / 60)}m`}</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      {kd.state === 'Running' && kd.streamUrl && (
+                        <button className="btn btn-sm btn-primary"
+                          onClick={() => window.location.href = `/cloud-device/${kd.id}/screen`}
+                          title="View device screen via WebRTC">
+                          <Eye size={10} /> View Screen
+                        </button>
+                      )}
+                      <button className="btn btn-sm btn-ghost"
+                        onClick={async () => {
+                          try {
+                            await cloudPlatformActions.restartDevice(kd.id);
+                            setActionMsg({ type: 'success', text: `Restarting ${kd.name}` });
+                            setTimeout(() => setActionMsg(null), 3000);
+                            await loadK8sDevices();
+                          } catch (e) {
+                            setActionMsg({ type: 'error', text: `Restart failed: ${(e as Error).message}` });
+                          }
+                        }}>
+                        <RotateCw size={10} /> Restart
+                      </button>
+                      {kd.phoneNumber && (
+                        <button className="btn btn-sm btn-ghost"
+                          onClick={() => openSmsInbox(kd.name)}>
+                          <MessageSquare size={10} /> SMS
+                        </button>
+                      )}
+                      <button className="btn btn-sm btn-ghost"
+                        style={{ color: '#f38ba8' }}
+                        onClick={async () => {
+                          if (!confirm(`Remove K8s device "${kd.name}"? This will delete the pod and data.`)) return;
+                          setK8sRemoving(kd.id);
+                          try {
+                            await cloudPlatformActions.removeDevice(kd.id);
+                            setActionMsg({ type: 'success', text: `Removed ${kd.name}` });
+                            setTimeout(() => setActionMsg(null), 3000);
+                            await loadK8sDevices();
+                          } catch (e) {
+                            setActionMsg({ type: 'error', text: `Remove failed: ${(e as Error).message}` });
+                          } finally {
+                            setK8sRemoving(null);
+                          }
+                        }}
+                        disabled={k8sRemoving === kd.id}>
+                        <Trash2 size={10} /> {k8sRemoving === kd.id ? 'Removing...' : 'Remove'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )
+        )}
+      </div>
+
+      {/* K8s Create Device Modal */}
+      {showK8sCreate && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000
+        }} onClick={() => !k8sCreating && setShowK8sCreate(false)}>
+          <div style={{
+            background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12,
+            padding: 24, width: 650, maxWidth: '95vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column'
+          }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Server size={18} style={{ color: '#89b4fa' }} /> Create K8s Cloud Device
+            </h3>
+
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: 'block', marginBottom: 4, fontSize: 13 }}>Device Name</label>
+              <input
+                value={k8sDeviceName}
+                onChange={e => setK8sDeviceName(e.target.value)}
+                placeholder="e.g., my-galaxy-s25"
+                style={{ width: '100%' }}
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: 4, fontSize: 13 }}>Android Version</label>
+                <select value={k8sSelectedImage} onChange={e => setK8sSelectedImage(e.target.value)}
+                  style={{ width: '100%', padding: '8px 12px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)' }}>
+                  {k8sImages.map(img => (
+                    <option key={img.id} value={img.id}>{img.name} {img.hasGapps ? '(GApps)' : ''}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 22 }}>
+                <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={k8sEnableGpu} onChange={e => setK8sEnableGpu(e.target.checked)} />
+                  GPU Acceleration
+                </label>
+                <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={k8sPersistStorage} onChange={e => setK8sPersistStorage(e.target.checked)} />
+                  Persistent Storage
+                </label>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 8 }}>
+              <label style={{ display: 'block', marginBottom: 4, fontSize: 13 }}>Select Hardware Profile</label>
+              <input
+                value={k8sProfileSearch}
+                onChange={e => setK8sProfileSearch(e.target.value)}
+                placeholder="Search profiles... (e.g., Samsung, Pixel, Galaxy S25)"
+                style={{ width: '100%' }}
+              />
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6, minHeight: 200, maxHeight: '45vh' }}>
+              {k8sProfiles.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>Loading hardware profiles...</div>
+              ) : (
+                k8sProfiles
+                  .filter(p => {
+                    const q = k8sProfileSearch.toLowerCase();
+                    return !q || p.name.toLowerCase().includes(q) || p.brand.toLowerCase().includes(q) || p.model.toLowerCase().includes(q) || p.category.toLowerCase().includes(q);
+                  })
+                  .map(profile => (
+                    <div key={profile.id} style={{
+                      padding: '10px 12px', borderRadius: 8,
+                      border: k8sSelectedProfile === profile.id ? '2px solid #89b4fa' : '1px solid var(--border)',
+                      background: k8sSelectedProfile === profile.id ? 'rgba(137,180,250,0.1)' : 'var(--bg)',
+                      cursor: k8sCreating ? 'default' : 'pointer',
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      transition: 'border-color 0.15s',
+                    }}
+                      onClick={() => !k8sCreating && setK8sSelectedProfile(profile.id)}
+                      onMouseEnter={e => { if (!k8sCreating && k8sSelectedProfile !== profile.id) (e.currentTarget as HTMLDivElement).style.borderColor = '#89b4fa'; }}
+                      onMouseLeave={e => { if (k8sSelectedProfile !== profile.id) (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--border)'; }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <Smartphone size={14} style={{ color: '#89b4fa' }} />
+                          {profile.name}
+                          <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'rgba(137,180,250,0.2)', color: '#89b4fa' }}>
+                            {profile.category}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                          {profile.cpuCores} cores | {profile.ramMb >= 1024 ? `${(profile.ramMb / 1024).toFixed(0)} GB` : `${profile.ramMb} MB`} RAM | {profile.screenWidth}x{profile.screenHeight} @ {profile.screenDpi}dpi | {profile.storageGb} GB
+                        </div>
+                      </div>
+                      {k8sSelectedProfile === profile.id && (
+                        <span style={{ color: '#89b4fa', fontWeight: 'bold', fontSize: 16 }}>&#10003;</span>
+                      )}
+                    </div>
+                  ))
+              )}
+            </div>
+
+            <div style={{ marginTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                {k8sProfiles.length} profiles available | Auto-assigns US phone number via Twilio
+              </span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-ghost" onClick={() => setShowK8sCreate(false)} disabled={k8sCreating}>
+                  Cancel
+                </button>
+                <button className="btn btn-success" disabled={k8sCreating || !k8sSelectedProfile}
+                  onClick={async () => {
+                    setK8sCreating(true);
+                    try {
+                      const result = await cloudPlatformActions.createDevice({
+                        name: k8sDeviceName || undefined as unknown as string,
+                        hardwareProfileId: k8sSelectedProfile,
+                        osImageId: k8sSelectedImage,
+                        assignPhoneNumber: true,
+                        persistentStorage: k8sPersistStorage,
+                        enableGpu: k8sEnableGpu,
+                      });
+                      setActionMsg({ type: 'success', text: `Created ${result.device.name} (${result.device.brand} ${result.device.model})` });
+                      setTimeout(() => setActionMsg(null), 5000);
+                      setShowK8sCreate(false);
+                      setK8sDeviceName('');
+                      setK8sSelectedProfile('');
+                      await loadK8sDevices();
+                    } catch (e) {
+                      setActionMsg({ type: 'error', text: `Create failed: ${(e as Error).message}` });
+                    } finally {
+                      setK8sCreating(false);
+                    }
+                  }}>
+                  {k8sCreating ? 'Creating...' : 'Create Device'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

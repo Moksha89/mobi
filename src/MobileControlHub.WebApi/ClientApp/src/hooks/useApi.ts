@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { SystemStatus, AndroidDevice, ScrcpySession, LogEntry, AppConfiguration, VpsConfiguration, TwilioAccountInfo, SmsMessage, GenymotionRecipe, GenymotionInstance } from '../types';
+import type { SystemStatus, AndroidDevice, ScrcpySession, LogEntry, AppConfiguration, VpsConfiguration, TwilioAccountInfo, SmsMessage, GenymotionRecipe, GenymotionInstance, HardwareProfile, OsImage, CloudDevice, CloudPlatformStatus } from '../types';
 
 const API_BASE = '/api';
 
@@ -293,6 +293,23 @@ export const genymotionActions = {
     fetchJson('/genymotion/instances/' + uuid + '/stop', { method: 'POST' }),
   getAccessToken: (uuid: string) =>
     fetchJson<{ accessToken: string }>('/genymotion/instances/' + uuid + '/access-token', { method: 'POST' }),
+};
+
+// K8s Cloud Platform actions
+export const cloudPlatformActions = {
+  getStatus: () => fetchJson<CloudPlatformStatus>('/cloud-platform/status'),
+  getProfiles: () => fetchJson<HardwareProfile[]>('/cloud-platform/profiles'),
+  getImages: () => fetchJson<OsImage[]>('/cloud-platform/images'),
+  getDevices: () => fetchJson<CloudDevice[]>('/cloud-platform/devices'),
+  getDevice: (deviceId: string) => fetchJson<CloudDevice>(`/cloud-platform/devices/${deviceId}`),
+  createDevice: (data: { name: string; hardwareProfileId: string; osImageId: string; assignPhoneNumber?: boolean; persistentStorage?: boolean; enableGpu?: boolean }) =>
+    fetchJson<{ success: boolean; message: string; device: CloudDevice }>('/cloud-platform/devices/create', { method: 'POST', body: JSON.stringify(data) }),
+  removeDevice: (deviceId: string) =>
+    fetchJson('/cloud-platform/devices/' + deviceId + '/remove', { method: 'POST' }),
+  restartDevice: (deviceId: string) =>
+    fetchJson('/cloud-platform/devices/' + deviceId + '/restart', { method: 'POST' }),
+  getStreamUrl: (deviceId: string) =>
+    fetchJson<{ streamUrl: string }>('/cloud-platform/devices/' + deviceId + '/stream-url'),
 };
 
 // Device action helpers

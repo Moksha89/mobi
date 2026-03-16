@@ -104,6 +104,91 @@ export interface GenymotionInstance {
   updatedAt: string;
 }
 
+// K8s Cloud Platform types
+export interface HardwareProfile {
+  id: string;
+  name: string;
+  brand: string;
+  model: string;
+  category: string;
+  cpuCores: number;
+  ramMb: number;
+  storageGb: number;
+  screenWidth: number;
+  screenHeight: number;
+  screenDpi: number;
+  gpuMode: string;
+  description: string;
+  supportedAndroidVersions: string[];
+}
+
+export interface OsImage {
+  id: string;
+  name: string;
+  androidVersion: string;
+  apiLevel: number;
+  dockerImage: string;
+  hasGapps: boolean;
+  isDefault: boolean;
+  description: string;
+}
+
+export interface CloudDevice {
+  id: string;
+  name: string;
+  state: string;
+  hardwareProfileId: string;
+  hardwareProfileName: string;
+  osImageId: string;
+  androidVersion: string;
+  brand: string;
+  model: string;
+  cpuCores: number;
+  ramMb: number;
+  storageGb: number;
+  screenWidth: number;
+  screenHeight: number;
+  screenDpi: number;
+  adbPort: number;
+  streamPort: number;
+  adbAddress: string;
+  streamUrl: string;
+  phoneNumber?: string;
+  podName: string;
+  nodeName: string;
+  createdAt: string;
+  startedAt?: string;
+  uptimeSeconds: number;
+  cpuUsagePercent: number;
+  memoryUsageMb: number;
+  gpuAccelerated: boolean;
+  hasGapps: boolean;
+  persistentStorage: boolean;
+}
+
+export interface CloudPlatformStatus {
+  isConfigured: boolean;
+  clusterReachable: boolean;
+  kubernetesVersion: string;
+  totalNodes: number;
+  readyNodes: number;
+  totalDevices: number;
+  runningDevices: number;
+  gpuAvailable: boolean;
+  gpuModel: string;
+  resources: ClusterResources;
+}
+
+export interface ClusterResources {
+  totalCpuMillicores: number;
+  usedCpuMillicores: number;
+  totalMemoryMb: number;
+  usedMemoryMb: number;
+  totalStorageGb: number;
+  usedStorageGb: number;
+  maxDevices: number;
+}
+
 export enum DeviceConnectionState {
   Unknown = 0,
   Online = 1,

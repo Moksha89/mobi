@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard';
 import Devices from './pages/Devices';
 import DeviceScreen from './pages/DeviceScreen';
 import GenymotionScreen from './pages/GenymotionScreen';
+import CloudDeviceScreen from './pages/CloudDeviceScreen';
 import Sessions from './pages/Sessions';
 import VpsRemote from './pages/VpsRemote';
 import Logs from './pages/Logs';
@@ -53,6 +54,7 @@ function App() {
           <Route path="/devices" element={<Devices />} />
           <Route path="/devices/:serial/screen" element={<DeviceScreen />} />
           <Route path="/genymotion/:uuid/screen" element={<GenymotionScreen />} />
+          <Route path="/cloud-device/:deviceId/screen" element={<CloudDeviceScreen />} />
           <Route path="/sessions" element={<Sessions />} />
           <Route path="/vps" element={<VpsRemote />} />
           <Route path="/logs" element={<Logs />} />
