@@ -5,10 +5,13 @@ namespace MobileControlHub.Domain.Models;
 /// </summary>
 public class AppConfiguration
 {
-    // Tool paths
-    public string AdbPath { get; set; } = "tools\\adb.exe";
-    public string ScrcpyPath { get; set; } = "tools\\scrcpy.exe";
-    public string RustDeskPath { get; set; } = "C:\\Program Files\\RustDesk\\rustdesk.exe";
+    // Tool paths (auto-detect platform)
+    public string AdbPath { get; set; } = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
+        System.Runtime.InteropServices.OSPlatform.Windows) ? "tools\\adb.exe" : "adb";
+    public string ScrcpyPath { get; set; } = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
+        System.Runtime.InteropServices.OSPlatform.Windows) ? "tools\\scrcpy.exe" : "scrcpy";
+    public string RustDeskPath { get; set; } = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
+        System.Runtime.InteropServices.OSPlatform.Windows) ? "C:\\Program Files\\RustDesk\\rustdesk.exe" : "rustdesk";
 
     // Monitoring settings
     public int DevicePollIntervalSeconds { get; set; } = 5;
