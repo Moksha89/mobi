@@ -157,13 +157,17 @@ while ($true) {
     Clear-StaleTunnel
 
     # Establish the tunnel using plink with embedded password
-    # Forward dashboard (5000) AND ADB server (5037 -> 15037) for physical device bridging
+    # Forward:
+    #   1. Dashboard (PC:5000 -> VPS:5000) for public access
+    #   2. ADB server (PC:5037 -> VPS:15037) for physical device ADB bridge
+    #   3. PC Dashboard API (PC:5000 -> VPS:15000) for VPS to proxy screen/control requests back to PC
     $tunnelArgs = @(
         "-batch",
         "-pw", $VpsPass,
         "-N",
         "-R", "0.0.0.0:${RemotePort}:127.0.0.1:${LocalPort}",
         "-R", "127.0.0.1:15037:127.0.0.1:5037",
+        "-R", "127.0.0.1:15000:127.0.0.1:5000",
         "${VpsUser}@${VpsHost}"
     )
 

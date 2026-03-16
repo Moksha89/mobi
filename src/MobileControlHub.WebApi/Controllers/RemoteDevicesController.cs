@@ -23,6 +23,17 @@ public class RemoteDevicesController : ControllerBase
     private static DateTime _lastScan = DateTime.MinValue;
     private static DateTime _lastPush = DateTime.MinValue;
 
+    /// <summary>Check if a device serial exists in the pushed device list (used by ScreenController for proxying).</summary>
+    public static bool IsPushedDevice(string serial)
+    {
+        lock (_pushedDevices)
+        {
+            if ((DateTime.UtcNow - _lastPush).TotalSeconds > 30)
+                return false;
+            return _pushedDevices.Any(d => d.Serial == serial);
+        }
+    }
+
     /// <summary>Get all remote physical devices (from ADB bridge + pushed from PC).</summary>
     [HttpGet]
     public async Task<ActionResult<List<RemotePhysicalDevice>>> GetRemoteDevices(CancellationToken ct)
