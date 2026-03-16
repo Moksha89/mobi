@@ -14,13 +14,12 @@ namespace MobileControlHub.Infrastructure.Services;
 /// </summary>
 public class GenymotionService : IGenymotionService
 {
-    private const string BaseUrl = "https://api.geny.io/cloud";
+    private const string BaseUrl = "https://api.geny.io/cloud/";
     private readonly HttpClient _http;
     private readonly ILogger<GenymotionService> _logger;
     private readonly string? _apiToken;
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         PropertyNameCaseInsensitive = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
@@ -32,9 +31,10 @@ public class GenymotionService : IGenymotionService
         _http = new HttpClient { BaseAddress = new Uri(BaseUrl) };
         if (!string.IsNullOrEmpty(_apiToken))
         {
-            _http.DefaultRequestHeaders.Add("x-api-token", _apiToken);
+            _http.DefaultRequestHeaders.TryAddWithoutValidation("x-api-token", _apiToken);
         }
         _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        _http.DefaultRequestHeaders.UserAgent.ParseAdd("MobileControlHub/1.0");
     }
 
     public bool IsConfigured => !string.IsNullOrEmpty(_apiToken);
@@ -45,7 +45,7 @@ public class GenymotionService : IGenymotionService
 
         try
         {
-            var response = await _http.GetAsync("/cloud/v1/recipes", ct);
+            var response = await _http.GetAsync("v1/recipes", ct);
             response.EnsureSuccessStatusCode();
             var json = await response.Content.ReadAsStringAsync(ct);
             var data = JsonSerializer.Deserialize<RecipesV1Response>(json, JsonOpts);
@@ -79,7 +79,7 @@ public class GenymotionService : IGenymotionService
 
         try
         {
-            var response = await _http.GetAsync("/cloud/v2/instances", ct);
+            var response = await _http.GetAsync("v2/instances", ct);
             response.EnsureSuccessStatusCode();
             var json = await response.Content.ReadAsStringAsync(ct);
             var data = JsonSerializer.Deserialize<InstancesV2Response>(json, JsonOpts);
@@ -100,7 +100,7 @@ public class GenymotionService : IGenymotionService
 
         try
         {
-            var response = await _http.GetAsync($"/cloud/v1/instances/{instanceUuid}", ct);
+            var response = await _http.GetAsync($"v1/instances/{instanceUuid}", ct);
             if (!response.IsSuccessStatusCode) return null;
             var json = await response.Content.ReadAsStringAsync(ct);
             var raw = JsonSerializer.Deserialize<RawInstance>(json, JsonOpts);
@@ -122,7 +122,7 @@ public class GenymotionService : IGenymotionService
             var payload = new { instance_name = instanceName, rename_on_conflict = true };
             var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
-            var response = await _http.PostAsync($"/cloud/v1/recipes/{recipeUuid}/start-disposable", content, ct);
+            var response = await _http.PostAsync($"v1/recipes/{recipeUuid}/start-disposable", content, ct);
             if (!response.IsSuccessStatusCode)
             {
                 var errBody = await response.Content.ReadAsStringAsync(ct);
@@ -153,7 +153,7 @@ public class GenymotionService : IGenymotionService
         try
         {
             var content = new StringContent("{}", Encoding.UTF8, "application/json");
-            var response = await _http.PostAsync($"/cloud/v1/instances/{instanceUuid}/stop-disposable", content, ct);
+            var response = await _http.PostAsync($"v1/instances/{instanceUuid}/stop-disposable", content, ct);
 
             if (response.IsSuccessStatusCode)
             {
