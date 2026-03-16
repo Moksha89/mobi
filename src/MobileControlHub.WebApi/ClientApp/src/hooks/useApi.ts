@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { SystemStatus, AndroidDevice, ScrcpySession, LogEntry, AppConfiguration, VpsConfiguration, TwilioAccountInfo, SmsMessage, GenymotionRecipe, GenymotionInstance, HardwareProfile, OsImage, CloudDevice, CloudPlatformStatus } from '../types';
+import type { SystemStatus, AndroidDevice, ScrcpySession, LogEntry, AppConfiguration, VpsConfiguration, TwilioAccountInfo, SmsMessage, GenymotionRecipe, GenymotionInstance, HardwareProfile, OsImage, CloudDevice, CloudPlatformStatus, RemotePhysicalDevice, RemoteBridgeStatus } from '../types';
 
 const API_BASE = '/api';
 
@@ -310,6 +310,13 @@ export const cloudPlatformActions = {
     fetchJson('/cloud-platform/devices/' + deviceId + '/restart', { method: 'POST' }),
   getStreamUrl: (deviceId: string) =>
     fetchJson<{ streamUrl: string }>('/cloud-platform/devices/' + deviceId + '/stream-url'),
+};
+
+// Remote physical device actions (ADB bridge from PC)
+export const remoteDeviceActions = {
+  getDevices: () => fetchJson<RemotePhysicalDevice[]>('/remote-devices'),
+  refresh: () => fetchJson<RemotePhysicalDevice[]>('/remote-devices/refresh', { method: 'POST' }),
+  getStatus: () => fetchJson<RemoteBridgeStatus>('/remote-devices/status'),
 };
 
 // Device action helpers

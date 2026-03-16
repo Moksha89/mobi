@@ -189,6 +189,31 @@ export interface ClusterResources {
   maxDevices: number;
 }
 
+export interface RemotePhysicalDevice {
+  serial: string;
+  model: string;
+  manufacturer: string;
+  androidVersion: string;
+  connectionState: string;
+  batteryLevel: number;
+  isScreenOn: boolean;
+  friendlyName: string;
+  source: string;
+  transportType: string;
+}
+
+export interface RemoteBridgeStatus {
+  hosts: Array<{
+    host: string;
+    port: number;
+    label: string;
+    isReachable: boolean;
+    deviceCount: number;
+  }>;
+  totalDevices: number;
+  lastScan: string;
+}
+
 export enum DeviceConnectionState {
   Unknown = 0,
   Online = 1,

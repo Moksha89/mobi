@@ -186,6 +186,29 @@ public class SendSmsRequest
     public string Body { get; set; } = string.Empty;
 }
 
+/// <summary>Remote physical device info (bridged from PC via tunnel).</summary>
+public class RemotePhysicalDevice
+{
+    public string Serial { get; set; } = string.Empty;
+    public string Model { get; set; } = string.Empty;
+    public string Manufacturer { get; set; } = string.Empty;
+    public string AndroidVersion { get; set; } = string.Empty;
+    public string ConnectionState { get; set; } = string.Empty;
+    public int BatteryLevel { get; set; } = -1;
+    public bool IsScreenOn { get; set; }
+    public string FriendlyName { get; set; } = string.Empty;
+    public string Source { get; set; } = "remote-pc";
+    public string TransportType { get; set; } = string.Empty;
+}
+
+/// <summary>Request to register remote ADB host for physical device bridging.</summary>
+public class RegisterRemoteAdbRequest
+{
+    public string Host { get; set; } = "127.0.0.1";
+    public int Port { get; set; } = 15037;
+    public string Label { get; set; } = "PC";
+}
+
 /// <summary>Request to start a Genymotion virtual device instance.</summary>
 public class StartGenymotionRequest
 {

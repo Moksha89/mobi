@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useDevices, deviceActions, sessionActions, virtualDeviceActions, twilioActions, genymotionActions, cloudPlatformActions } from '../hooks/useApi';
+import { useDevices, deviceActions, sessionActions, virtualDeviceActions, twilioActions, genymotionActions, cloudPlatformActions, remoteDeviceActions } from '../hooks/useApi';
 import { DeviceConnectionState } from '../types';
-import type { VirtualDeviceInfo, SmsMessage, GenymotionRecipe, GenymotionInstance, HardwareProfile, OsImage, CloudDevice, CloudPlatformStatus } from '../types';
+import type { VirtualDeviceInfo, SmsMessage, GenymotionRecipe, GenymotionInstance, HardwareProfile, OsImage, CloudDevice, CloudPlatformStatus, RemotePhysicalDevice, RemoteBridgeStatus } from '../types';
 import {
   Smartphone, RefreshCw, Monitor, RotateCcw, Camera,
   Power, Copy, Search, AlertTriangle, Edit2, Eye, Cloud,
   Plus, Trash2, RotateCw, Play, Square, Phone, MessageSquare, Send, X, Zap, StopCircle, Cpu, HardDrive,
-  Server, Layers, Database
+  Server, Layers, Database, Wifi, WifiOff, Usb
 } from 'lucide-react';
 
 const stateLabel = (s: DeviceConnectionState) =>
@@ -83,6 +83,12 @@ function Devices() {
   const [k8sCreating, setK8sCreating] = useState(false);
   const [k8sRemoving, setK8sRemoving] = useState<string | null>(null);
 
+  // Remote Physical Devices state (ADB bridge from PC)
+  const [remoteDevices, setRemoteDevices] = useState<RemotePhysicalDevice[]>([]);
+  const [remoteBridgeStatus, setRemoteBridgeStatus] = useState<RemoteBridgeStatus | null>(null);
+  const [showRemotePanel, setShowRemotePanel] = useState(true);
+  const [remoteRefreshing, setRemoteRefreshing] = useState(false);
+
   const loadCloudDevices = useCallback(async () => {
     try {
       const data = await virtualDeviceActions.getAll();
@@ -148,6 +154,23 @@ function Devices() {
     const id = setInterval(loadK8sDevices, 10000);
     return () => clearInterval(id);
   }, [loadK8sDevices]);
+
+  const loadRemoteDevices = useCallback(async () => {
+    try {
+      const [devs, status] = await Promise.all([
+        remoteDeviceActions.getDevices(),
+        remoteDeviceActions.getStatus(),
+      ]);
+      setRemoteDevices(devs);
+      setRemoteBridgeStatus(status);
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    loadRemoteDevices();
+    const id = setInterval(loadRemoteDevices, 8000);
+    return () => clearInterval(id);
+  }, [loadRemoteDevices]);
 
   const filtered = devices.filter(d => {
     const q = search.toLowerCase();
@@ -999,6 +1022,102 @@ function Devices() {
           </div>
         </div>
       )}
+
+      {/* Remote Physical Devices Panel (ADB Bridge from PC) */}
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16, marginBottom: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: showRemotePanel ? 12 : 0 }}>
+          <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8, fontSize: 15 }}>
+            <Smartphone size={18} style={{ color: '#89b4fa' }} />
+            Physical Devices (USB via PC)
+            <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 'normal' }}>
+              {remoteDevices.length} device(s)
+            </span>
+            {remoteBridgeStatus && remoteBridgeStatus.hosts.length > 0 && (
+              <span style={{ fontSize: 11 }}>
+                {remoteBridgeStatus.hosts[0].isReachable
+                  ? <span style={{ color: '#a6e3a1', display: 'inline-flex', alignItems: 'center', gap: 3 }}><Wifi size={12} /> Bridge Connected</span>
+                  : <span style={{ color: '#f38ba8', display: 'inline-flex', alignItems: 'center', gap: 3 }}><WifiOff size={12} /> Bridge Offline</span>
+                }
+              </span>
+            )}
+          </h3>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-sm btn-primary" onClick={async () => {
+              setRemoteRefreshing(true);
+              try {
+                const devs = await remoteDeviceActions.refresh();
+                setRemoteDevices(devs);
+                setActionMsg({ type: 'success', text: `Found ${devs.length} physical device(s)` });
+                setTimeout(() => setActionMsg(null), 3000);
+              } catch (e) {
+                setActionMsg({ type: 'error', text: `Refresh failed: ${(e as Error).message}` });
+              } finally { setRemoteRefreshing(false); }
+            }} disabled={remoteRefreshing}>
+              <RefreshCw size={12} /> {remoteRefreshing ? 'Scanning...' : 'Refresh'}
+            </button>
+            <button className="btn btn-sm btn-ghost" onClick={() => setShowRemotePanel(!showRemotePanel)}>
+              {showRemotePanel ? 'Collapse' : 'Expand'}
+            </button>
+          </div>
+        </div>
+
+        {showRemotePanel && (
+          remoteDevices.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-muted)' }}>
+              <Smartphone size={32} style={{ opacity: 0.3, marginBottom: 8 }} />
+              <p style={{ margin: '0 0 4px' }}>
+                {remoteBridgeStatus && remoteBridgeStatus.hosts.length > 0 && remoteBridgeStatus.hosts[0].isReachable
+                  ? 'Bridge connected but no physical devices found. Connect a phone via USB to your PC.'
+                  : 'No PC bridge connected. Run setup-all.bat on your PC to bridge physical devices.'}
+              </p>
+              <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)' }}>
+                Physical phones connected via USB to your PC will appear here automatically.
+              </p>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+              {remoteDevices.map(rd => (
+                <div key={rd.serial} style={{
+                  background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8,
+                  padding: 12, display: 'flex', flexDirection: 'column', gap: 8
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Smartphone size={16} style={{ color: rd.connectionState === 'Online' ? '#89b4fa' : '#666' }} />
+                      <strong style={{ fontSize: 13 }}>{rd.friendlyName || rd.model || rd.serial}</strong>
+                    </div>
+                    <span className={`badge ${rd.connectionState === 'Online' ? 'online' : rd.connectionState === 'Unauthorized' ? 'warning' : 'offline'}`} style={{ fontSize: 10 }}>
+                      <span className="badge-dot" />
+                      {rd.connectionState}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'grid', gridTemplateColumns: '90px 1fr', gap: '2px 8px' }}>
+                    <span>Serial:</span><span style={{ fontFamily: 'monospace' }}>{rd.serial}</span>
+                    <span>Model:</span><span>{rd.model || 'Unknown'}</span>
+                    <span>Manufacturer:</span><span>{rd.manufacturer || 'Unknown'}</span>
+                    <span>Android:</span><span>{rd.androidVersion || 'N/A'}</span>
+                    <span>Connection:</span><span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><Usb size={10} /> USB (Remote PC)</span>
+                    <span>Battery:</span><span>{rd.batteryLevel >= 0 ? <BatteryIndicator level={rd.batteryLevel} /> : 'N/A'}</span>
+                    <span>Source:</span><span style={{ fontFamily: 'monospace' }}>{rd.source}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <button className="btn btn-sm btn-primary"
+                      onClick={() => navigate(`/devices/${rd.serial}/screen`)}
+                      title="View and control phone screen in browser"
+                      disabled={rd.connectionState !== 'Online'}>
+                      <Eye size={12} /> View Screen
+                    </button>
+                    <button className="btn btn-sm btn-ghost"
+                      onClick={() => { navigator.clipboard.writeText(`${rd.serial} | ${rd.model} | ${rd.manufacturer}`); setActionMsg({ type: 'success', text: 'Copied to clipboard' }); setTimeout(() => setActionMsg(null), 2000); }}>
+                      <Copy size={12} /> Copy Info
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        )}
+      </div>
 
       <div className="filters-bar">
         <div style={{ position: 'relative', flex: 1, maxWidth: 400 }}>

@@ -31,6 +31,7 @@ Write-Host "============================================================" -Foreg
 Write-Host ""
 Write-Host "   Dashboard will be accessible from anywhere at:" -ForegroundColor White
 Write-Host "   http://${VpsHost}:${RemotePort}" -ForegroundColor Green
+Write-Host "   Physical devices will be bridged via ADB (port 15037)" -ForegroundColor White
 Write-Host ""
 
 # ============================================================
@@ -156,11 +157,13 @@ while ($true) {
     Clear-StaleTunnel
 
     # Establish the tunnel using plink with embedded password
+    # Forward dashboard (5000) AND ADB server (5037 -> 15037) for physical device bridging
     $tunnelArgs = @(
         "-batch",
         "-pw", $VpsPass,
         "-N",
         "-R", "0.0.0.0:${RemotePort}:127.0.0.1:${LocalPort}",
+        "-R", "127.0.0.1:15037:127.0.0.1:5037",
         "${VpsUser}@${VpsHost}"
     )
 
