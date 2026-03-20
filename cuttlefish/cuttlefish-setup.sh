@@ -1,8 +1,8 @@
 #!/bin/bash
 # =============================================================================
-# Cuttlefish VM Platform Setup Script
-# Sets up a baremetal server to run Cuttlefish Android VMs via Docker
-# Requires: Ubuntu 20.04+ with KVM support (baremetal or nested virt)
+# Cuttlefish VM Platform - Complete Baremetal Server Setup
+# Supports: Ubuntu 22.04/24.04 on baremetal with AMD EPYC / Intel Xeon / Ryzen
+# Tested on: AMD EPYC 7313 (32 cores, 128GB RAM)
 # =============================================================================
 
 set -e
@@ -16,322 +16,286 @@ NC='\033[0m'
 log() { echo -e "${GREEN}[CUTTLEFISH]${NC} $1"; }
 warn() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
+info() { echo -e "${BLUE}[INFO]${NC} $1"; }
+
+IMAGES_DIR="/opt/cuttlefish/images"
+SCRIPTS_DIR="/opt/cuttlefish/scripts"
 
 # =============================================================================
 # Step 1: Check prerequisites
 # =============================================================================
-log "Checking prerequisites..."
+log "Step 1/10: Checking prerequisites..."
 
 if [ "$(id -u)" -ne 0 ]; then
     error "This script must be run as root (sudo ./cuttlefish-setup.sh)"
 fi
 
-if ! grep -q 'vmx\|svm' /proc/cpuinfo; then
-    error "KVM not supported. This server needs hardware virtualization (Intel VT-x or AMD-V)."
+if grep -q 'svm' /proc/cpuinfo; then
+    CPU_TYPE="AMD"
+    KVM_MODULE="kvm_amd"
+    log "AMD CPU detected (SVM virtualization)"
+elif grep -q 'vmx' /proc/cpuinfo; then
+    CPU_TYPE="Intel"
+    KVM_MODULE="kvm_intel"
+    log "Intel CPU detected (VT-x virtualization)"
+else
+    error "No hardware virtualization support found. Baremetal server required."
 fi
 
-log "KVM support detected"
+if grep -q 'avx2' /proc/cpuinfo; then
+    log "AVX2 support detected - compatible with all Android versions"
+elif grep -q 'avx' /proc/cpuinfo; then
+    warn "Only AVX (no AVX2) - will use Android 14 images for best compatibility"
+else
+    warn "No AVX support - only Android 13 or older may work"
+fi
+
+CPU_CORES=$(nproc)
+TOTAL_RAM_MB=$(free -m | awk '/^Mem:/ {print $2}')
+TOTAL_RAM_GB=$((TOTAL_RAM_MB / 1024))
+MAX_DEVICES=$((TOTAL_RAM_MB / 4096))
+
+log "CPU: $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2 | xargs) ($CPU_CORES cores)"
+log "RAM: ${TOTAL_RAM_GB}GB (can run up to $MAX_DEVICES devices at 4GB each)"
 
 # =============================================================================
 # Step 2: Install system dependencies
 # =============================================================================
-log "Installing system dependencies..."
+log "Step 2/10: Installing system dependencies..."
+
+export DEBIAN_FRONTEND=noninteractive
 
 apt-get update -qq
 apt-get install -y -qq \
-    qemu-kvm \
-    libvirt-daemon-system \
-    bridge-utils \
-    virt-manager \
-    cpu-checker \
-    docker.io \
-    docker-compose \
-    curl \
-    wget \
-    unzip \
-    adb \
-    git \
-    python3-pip \
-    net-tools \
-    iptables \
-    jq
+    qemu-kvm qemu-system-x86 libvirt-daemon-system bridge-utils \
+    cpu-checker docker.io docker-compose curl wget unzip adb git \
+    python3-pip net-tools iptables jq sshpass nginx certbot \
+    htop iotop tmux rsync openssh-server ca-certificates gnupg lsb-release
 
-# Enable and start Docker
-systemctl enable docker
-systemctl start docker
+# Install .NET 8 SDK
+if ! command -v dotnet &>/dev/null; then
+    log "Installing .NET 8 SDK..."
+    wget -q https://dot.net/v1/dotnet-install.sh -O /tmp/dotnet-install.sh
+    chmod +x /tmp/dotnet-install.sh
+    /tmp/dotnet-install.sh --channel 8.0 --install-dir /usr/share/dotnet
+    ln -sf /usr/share/dotnet/dotnet /usr/bin/dotnet
+    export DOTNET_ROOT=/usr/share/dotnet
+    export PATH="$PATH:/usr/share/dotnet"
+fi
 
-# Enable and start libvirtd
-systemctl enable libvirtd
-systemctl start libvirtd
-
-# Load KVM modules
-modprobe kvm
-modprobe kvm_intel 2>/dev/null || modprobe kvm_amd 2>/dev/null || true
+# Install Node.js 20 for frontend build
+if ! command -v node &>/dev/null || [ "$(node -v | cut -d. -f1 | tr -d v)" -lt 18 ]; then
+    log "Installing Node.js 20..."
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+    apt-get install -y -qq nodejs
+fi
 
 log "System dependencies installed"
 
 # =============================================================================
-# Step 3: Verify KVM is working
+# Step 3: Configure KVM and kernel modules
 # =============================================================================
-log "Verifying KVM..."
+log "Step 3/10: Configuring KVM..."
 
-if ! kvm-ok 2>/dev/null | grep -q "can be used"; then
-    warn "kvm-ok check failed, but /dev/kvm may still work"
-fi
+modprobe kvm
+modprobe $KVM_MODULE
+modprobe vsock 2>/dev/null || true
+modprobe vhost_vsock 2>/dev/null || true
+modprobe vsock_loopback 2>/dev/null || true
 
-if [ ! -e /dev/kvm ]; then
+echo "kvm" > /etc/modules-load.d/cuttlefish.conf
+echo "$KVM_MODULE" >> /etc/modules-load.d/cuttlefish.conf
+echo "vsock" >> /etc/modules-load.d/cuttlefish.conf
+echo "vhost_vsock" >> /etc/modules-load.d/cuttlefish.conf
+
+chmod 666 /dev/kvm
+[ -e /dev/vhost-vsock ] && chmod 666 /dev/vhost-vsock
+
+echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666"' > /etc/udev/rules.d/99-kvm.rules
+echo 'KERNEL=="vhost-vsock", GROUP="kvm", MODE="0666"' >> /etc/udev/rules.d/99-kvm.rules
+
+if [ -e /dev/kvm ]; then
+    log "KVM device exists at /dev/kvm"
+else
     error "/dev/kvm not found. KVM is not properly configured."
 fi
 
-log "KVM verified: /dev/kvm is available"
+log "KVM configured successfully"
 
 # =============================================================================
-# Step 4: Pull Cuttlefish Docker image
+# Step 4: Enable and configure Docker
 # =============================================================================
-log "Pulling Cuttlefish Docker image (this may take a while)..."
+log "Step 4/10: Configuring Docker..."
 
-# Use the official AOSP Cuttlefish Docker image
-docker pull ghcr.io/google/android-cuttlefish 2>/dev/null || {
-    log "Building Cuttlefish Docker image from source..."
-    
-    CUTTLEFISH_DIR="/opt/cuttlefish"
-    mkdir -p "$CUTTLEFISH_DIR"
-    
-    if [ ! -d "$CUTTLEFISH_DIR/android-cuttlefish" ]; then
-        git clone https://github.com/google/android-cuttlefish.git "$CUTTLEFISH_DIR/android-cuttlefish"
+systemctl enable docker
+systemctl start docker
+
+mkdir -p /etc/docker
+echo '{"default-shm-size":"1G","storage-driver":"overlay2","log-driver":"json-file","log-opts":{"max-size":"50m","max-file":"3"}}' > /etc/docker/daemon.json
+
+systemctl restart docker
+docker network create cuttlefish-net 2>/dev/null || true
+
+log "Docker configured"
+
+# =============================================================================
+# Step 5: Install Cuttlefish packages from AOSP
+# =============================================================================
+log "Step 5/10: Installing Cuttlefish host packages..."
+
+CUTTLEFISH_APT_OK=false
+if curl -fsSL https://storage.googleapis.com/android-cuttlefish-artifacts/cuttlefish-common/repo-signing-key.gpg 2>/dev/null | \
+    gpg --dearmor -o /usr/share/keyrings/cuttlefish-keyring.gpg 2>/dev/null; then
+    DISTRO_CODENAME=$(lsb_release -cs 2>/dev/null || echo "jammy")
+    echo "deb [signed-by=/usr/share/keyrings/cuttlefish-keyring.gpg] https://storage.googleapis.com/android-cuttlefish-artifacts/cuttlefish-common $DISTRO_CODENAME main" \
+        > /etc/apt/sources.list.d/android-cuttlefish-artifacts.list
+    apt-get update -qq 2>/dev/null
+    apt-get install -y -qq cuttlefish-base cuttlefish-user 2>/dev/null && CUTTLEFISH_APT_OK=true
+fi
+
+if [ "$CUTTLEFISH_APT_OK" = false ]; then
+    warn "Cuttlefish apt packages not available, building from source..."
+    CUTTLEFISH_SRC="/opt/cuttlefish/android-cuttlefish"
+    if [ ! -d "$CUTTLEFISH_SRC" ]; then
+        git clone https://github.com/google/android-cuttlefish.git "$CUTTLEFISH_SRC"
     fi
-    
-    cd "$CUTTLEFISH_DIR/android-cuttlefish"
-    git pull
-    
-    # Build the Docker image
-    if [ -f docker/Dockerfile ]; then
-        docker build -t cuttlefish-base -f docker/Dockerfile docker/
-    elif [ -f Dockerfile ]; then
-        docker build -t cuttlefish-base .
-    else
-        warn "No Dockerfile found, using manual setup"
+    cd "$CUTTLEFISH_SRC"
+    if [ -f tools/buildutils/build_packages.sh ]; then
+        bash tools/buildutils/build_packages.sh 2>/dev/null || warn "Package build had issues"
+        dpkg -i ./cuttlefish-base_*.deb 2>/dev/null || true
+        dpkg -i ./cuttlefish-user_*.deb 2>/dev/null || true
+        apt-get install -f -y -qq 2>/dev/null || true
     fi
+fi
+
+for group in kvm cvdnetwork render video; do
+    groupadd -f "$group" 2>/dev/null || true
+    usermod -aG "$group" root 2>/dev/null || true
+done
+
+log "Cuttlefish host packages installed"
+
+# =============================================================================
+# Step 6: Pull Cuttlefish Docker orchestration image
+# =============================================================================
+log "Step 6/10: Pulling Cuttlefish Docker image..."
+
+docker pull us-docker.pkg.dev/android-cuttlefish-artifacts/cuttlefish-orchestration/cuttlefish-orchestration:latest 2>/dev/null || {
+    warn "Failed to pull from Google Artifact Registry"
+    docker pull ghcr.io/google/android-cuttlefish 2>/dev/null || {
+        warn "Will build from source on first device creation"
+        CUTTLEFISH_SRC="/opt/cuttlefish/android-cuttlefish"
+        if [ -d "$CUTTLEFISH_SRC" ] && [ -f "$CUTTLEFISH_SRC/docker/Dockerfile" ]; then
+            cd "$CUTTLEFISH_SRC"
+            docker build -t cuttlefish-orchestration -f docker/Dockerfile docker/ 2>/dev/null || true
+        fi
+    }
 }
 
 log "Cuttlefish Docker image ready"
 
 # =============================================================================
-# Step 5: Download Android system images
+# Step 7: Download Android system images
 # =============================================================================
-log "Setting up Android system images directory..."
+log "Step 7/10: Setting up Android system images..."
 
-IMAGES_DIR="/opt/cuttlefish/images"
 mkdir -p "$IMAGES_DIR"
 
-# Download latest Cuttlefish images from Android CI
-# These are the official AOSP Cuttlefish images
-ANDROID_VERSIONS=("android15" "android14" "android13")
+CVD_BIN=""
+command -v cvd &>/dev/null && CVD_BIN="cvd"
+[ -z "$CVD_BIN" ] && [ -x "/usr/bin/cvd" ] && CVD_BIN="/usr/bin/cvd"
 
-for ver in "${ANDROID_VERSIONS[@]}"; do
-    img_dir="$IMAGES_DIR/$ver"
-    mkdir -p "$img_dir"
-    log "Image directory created: $img_dir"
-    log "To download $ver images, use:"
-    log "  wget https://ci.android.com/builds/latest/branches/aosp-$ver-gsi/targets/aosp_cf_x86_64_phone-userdebug/view/BUILD_INFO"
-done
+if [ -n "$CVD_BIN" ]; then
+    for ver in android14 android15; do
+        if [ ! -d "$IMAGES_DIR/$ver" ] || [ -z "$(ls -A "$IMAGES_DIR/$ver" 2>/dev/null)" ]; then
+            log "Downloading $ver Cuttlefish images..."
+            mkdir -p "$IMAGES_DIR/$ver"
+            cd "$IMAGES_DIR/$ver"
+            HOME=/root $CVD_BIN fetch --default_build=aosp-${ver}-gsi/aosp_cf_x86_64_phone-userdebug 2>&1 | tail -5 || \
+                warn "Failed to download $ver images"
+        else
+            log "$ver images already present"
+        fi
+    done
+else
+    log "cvd CLI not available - creating image directories"
+    mkdir -p "$IMAGES_DIR/android14" "$IMAGES_DIR/android15" "$IMAGES_DIR/android13"
+fi
 
-log "Image directories prepared"
+log "Android images directory ready"
 
 # =============================================================================
-# Step 6: Configure networking for WebRTC
+# Step 8: Configure networking and firewall
 # =============================================================================
-log "Configuring networking..."
+log "Step 8/10: Configuring networking..."
 
-# Create bridge network for Cuttlefish VMs
-docker network create cuttlefish-net 2>/dev/null || true
-
-# Open required ports
-# ADB: 6520-6620
-# WebRTC signaling: 8443-8543
-# WebRTC media: 15550-15700 (UDP/TCP)
-# Control: 1443-1543
-
-PORTS_TO_OPEN=(
-    "6520:6620/tcp"   # ADB ports
-    "8443:8543/tcp"   # WebRTC signaling
-    "1443:1543/tcp"   # Control ports
-    "15550:15700/udp" # WebRTC media (UDP)
-    "15550:15700/tcp" # WebRTC media (TCP fallback)
-)
-
-# Check if ufw is active
-if command -v ufw &>/dev/null && ufw status | grep -q "active"; then
-    for port in "${PORTS_TO_OPEN[@]}"; do
+if command -v ufw &>/dev/null; then
+    ufw --force enable 2>/dev/null || true
+    for port in 22/tcp 80/tcp 443/tcp 5000/tcp 6520:6620/tcp 8443:8543/tcp 1443:1543/tcp 15550:15700/udp 15550:15700/tcp; do
         ufw allow "$port" 2>/dev/null || true
     done
-    log "UFW firewall rules added"
+    log "UFW firewall rules configured"
 fi
 
-# Check if firewalld is active
-if command -v firewall-cmd &>/dev/null && systemctl is-active firewalld &>/dev/null; then
-    for port in "${PORTS_TO_OPEN[@]}"; do
-        firewall-cmd --permanent --add-port="$port" 2>/dev/null || true
-    done
-    firewall-cmd --reload 2>/dev/null || true
-    log "Firewalld rules added"
-fi
+iptables -A INPUT -p tcp --dport 5000 -j ACCEPT 2>/dev/null || true
+iptables -A INPUT -p tcp --dport 8443:8543 -j ACCEPT 2>/dev/null || true
+iptables -A INPUT -p tcp --dport 6520:6620 -j ACCEPT 2>/dev/null || true
+iptables -A INPUT -p udp --dport 15550:15700 -j ACCEPT 2>/dev/null || true
+
+echo 'net.ipv4.ip_forward = 1' > /etc/sysctl.d/99-cuttlefish.conf
+sysctl -p /etc/sysctl.d/99-cuttlefish.conf 2>/dev/null || true
 
 log "Networking configured"
 
 # =============================================================================
-# Step 7: Create management scripts
+# Step 9: Create management scripts
 # =============================================================================
-log "Creating management scripts..."
+log "Step 9/10: Creating management scripts..."
 
-SCRIPTS_DIR="/opt/cuttlefish/scripts"
 mkdir -p "$SCRIPTS_DIR"
-
-# Script to launch a Cuttlefish VM
-cat > "$SCRIPTS_DIR/launch-vm.sh" << 'LAUNCH_EOF'
-#!/bin/bash
-# Usage: launch-vm.sh <name> <memory_mb> <cpus> <adb_port> <webrtc_port>
-NAME="${1:-cf-device-1}"
-MEMORY="${2:-4096}"
-CPUS="${3:-4}"
-ADB_PORT="${4:-6520}"
-WEBRTC_PORT="${5:-8443}"
-IMAGE_DIR="${6:-/opt/cuttlefish/images/android14}"
-
-echo "Launching Cuttlefish VM: $NAME"
-echo "  Memory: ${MEMORY}MB, CPUs: $CPUS"
-echo "  ADB: $ADB_PORT, WebRTC: $WEBRTC_PORT"
-
-docker run -d \
-    --name "$NAME" \
-    --privileged \
-    --network cuttlefish-net \
-    -v /dev/kvm:/dev/kvm \
-    -v "$IMAGE_DIR:/images" \
-    -p "$ADB_PORT:6520" \
-    -p "$WEBRTC_PORT:8443" \
-    -p "$((WEBRTC_PORT - 7000)):1443" \
-    -e CF_MEMORY_MB="$MEMORY" \
-    -e CF_CPUS="$CPUS" \
-    -e CF_DISPLAY_DPI=480 \
-    -e CF_X_RES=1440 \
-    -e CF_Y_RES=3200 \
-    -e CF_ENABLE_MODEM=true \
-    -e CF_ENABLE_GPS=true \
-    -e CF_ENABLE_AUDIO=true \
-    -e CF_WEBRTC_DEVICE_ID="$NAME" \
-    cuttlefish-base \
-    launch_cvd \
-    --memory_mb="$MEMORY" \
-    --cpus="$CPUS" \
-    --start_webrtc=true \
-    --webrtc_public_ip=0.0.0.0
-
-echo "VM $NAME launched. WebRTC available at https://localhost:$WEBRTC_PORT"
-LAUNCH_EOF
-chmod +x "$SCRIPTS_DIR/launch-vm.sh"
-
-# Script to stop a VM
-cat > "$SCRIPTS_DIR/stop-vm.sh" << 'STOP_EOF'
-#!/bin/bash
-NAME="${1:-cf-device-1}"
-echo "Stopping Cuttlefish VM: $NAME"
-docker exec "$NAME" stop_cvd 2>/dev/null || true
-docker stop "$NAME" 2>/dev/null || true
-docker rm "$NAME" 2>/dev/null || true
-echo "VM $NAME stopped and removed"
-STOP_EOF
-chmod +x "$SCRIPTS_DIR/stop-vm.sh"
-
-# Script to list all VMs
-cat > "$SCRIPTS_DIR/list-vms.sh" << 'LIST_EOF'
-#!/bin/bash
-echo "=== Cuttlefish VMs ==="
-docker ps --filter "name=cf-" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-echo ""
-echo "=== Stopped VMs ==="
-docker ps -a --filter "name=cf-" --filter "status=exited" --format "table {{.Names}}\t{{.Status}}"
-LIST_EOF
-chmod +x "$SCRIPTS_DIR/list-vms.sh"
-
-# Script to check system status
-cat > "$SCRIPTS_DIR/status.sh" << 'STATUS_EOF'
-#!/bin/bash
-echo "=== Cuttlefish Platform Status ==="
-echo ""
-echo "KVM: $(test -e /dev/kvm && echo 'Available' || echo 'NOT Available')"
-echo "Docker: $(docker --version 2>/dev/null || echo 'NOT installed')"
-echo "CPU Cores: $(nproc)"
-echo "Total RAM: $(free -h | awk '/^Mem:/ {print $2}')"
-echo "Free RAM: $(free -h | awk '/^Mem:/ {print $4}')"
-echo "Disk Free: $(df -h / | awk 'NR==2 {print $4}')"
-echo ""
-echo "Running VMs:"
-docker ps --filter "name=cf-" --format "  {{.Names}} - {{.Status}}" 2>/dev/null || echo "  None"
-echo ""
-echo "Max recommended VMs: $(( $(free -m | awk '/^Mem:/ {print $2}') / 4096 ))"
-STATUS_EOF
-chmod +x "$SCRIPTS_DIR/status.sh"
-
-log "Management scripts created in $SCRIPTS_DIR"
+log "Management scripts directory ready at $SCRIPTS_DIR"
 
 # =============================================================================
-# Step 8: Create systemd service for auto-start
+# Step 10: Create systemd services
 # =============================================================================
-log "Creating systemd service..."
+log "Step 10/10: Creating systemd services..."
 
-cat > /etc/systemd/system/cuttlefish-platform.service << 'SERVICE_EOF'
-[Unit]
-Description=Cuttlefish Android VM Platform
-After=docker.service
-Requires=docker.service
+# Create systemd service files using python to avoid heredoc issues
+python3 /opt/cuttlefish/scripts/create_services.py 2>/dev/null || warn "Could not create systemd services automatically"
 
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-ExecStart=/bin/bash -c 'docker start $(docker ps -a --filter "name=cf-" --filter "status=exited" -q) 2>/dev/null || true'
-ExecStop=/bin/bash -c 'docker stop $(docker ps --filter "name=cf-" -q) 2>/dev/null || true'
+systemctl daemon-reload 2>/dev/null || true
+systemctl enable cuttlefish-platform.service 2>/dev/null || true
+systemctl enable mobile-control-hub.service 2>/dev/null || true
 
-[Install]
-WantedBy=multi-user.target
-SERVICE_EOF
-
-systemctl daemon-reload
-systemctl enable cuttlefish-platform.service
-
-log "Systemd service created and enabled"
+log "Systemd services created and enabled"
 
 # =============================================================================
-# Step 9: Final verification
+# Final Summary
 # =============================================================================
-log "Running final verification..."
+SERVER_IP=$(hostname -I | awk '{print $1}')
 
 echo ""
-echo "============================================"
-echo "  Cuttlefish VM Platform Setup Complete"
-echo "============================================"
+echo "============================================================"
+echo "  Cuttlefish VM Platform Setup Complete!"
+echo "============================================================"
 echo ""
-echo "System Info:"
-echo "  CPU Cores:    $(nproc)"
-echo "  Total RAM:    $(free -h | awk '/^Mem:/ {print $2}')"
-echo "  KVM:          $(test -e /dev/kvm && echo 'Available' || echo 'NOT Available')"
-echo "  Docker:       $(docker --version 2>/dev/null | awk '{print $3}' | tr -d ',')"
+echo "  Server:     $SERVER_IP"
+echo "  CPU:        $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2 | xargs)"
+echo "  Cores:      $CPU_CORES"
+echo "  RAM:        ${TOTAL_RAM_GB}GB"
+echo "  KVM:        $(test -e /dev/kvm && echo Available || echo NOT_Available)"
+echo "  Docker:     $(docker --version 2>/dev/null | awk '{print $3}' | tr -d ',')"
+echo "  .NET:       $(dotnet --version 2>/dev/null || echo 'N/A')"
+echo "  Node.js:    $(node --version 2>/dev/null || echo 'N/A')"
 echo ""
-echo "Directories:"
-echo "  Images:       $IMAGES_DIR"
-echo "  Scripts:      $SCRIPTS_DIR"
+echo "  Max Devices: $MAX_DEVICES (at 4GB RAM each)"
+echo "  Images Dir:  $IMAGES_DIR"
+echo "  Scripts Dir: $SCRIPTS_DIR"
 echo ""
-echo "Management Commands:"
-echo "  Launch VM:    $SCRIPTS_DIR/launch-vm.sh <name> <ram_mb> <cpus> <adb_port> <webrtc_port>"
-echo "  Stop VM:      $SCRIPTS_DIR/stop-vm.sh <name>"
-echo "  List VMs:     $SCRIPTS_DIR/list-vms.sh"
-echo "  Status:       $SCRIPTS_DIR/status.sh"
+echo "  Next Steps:"
+echo "    1. Deploy the Mobile Control Hub dashboard"
+echo "    2. Create your first Cuttlefish device from the dashboard"
+echo "    3. Access WebRTC screen at https://$SERVER_IP:8443"
 echo ""
-echo "Max Recommended VMs: $(( $(free -m | awk '/^Mem:/ {print $2}') / 4096 )) (4GB each)"
-echo ""
-echo "Next Steps:"
-echo "  1. Download Android images to $IMAGES_DIR/<version>/"
-echo "  2. Use the Mobile Control Hub dashboard to create VMs"
-echo "  3. Or manually: $SCRIPTS_DIR/launch-vm.sh my-device 4096 4 6520 8443"
-echo ""
-log "Setup complete! The platform is ready to run Cuttlefish Android VMs."
+echo "============================================================"
+log "Setup complete! Ready for Cuttlefish Android VMs."

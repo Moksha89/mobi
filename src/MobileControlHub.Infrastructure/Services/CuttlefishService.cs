@@ -17,6 +17,8 @@ public class CuttlefishService : ICuttlefishService
     private readonly ILogger<CuttlefishService> _logger;
     private readonly ITwilioService _twilioService;
     private readonly string _hostAddress;
+    private readonly string _hostUser;
+    private readonly string _hostPassword;
     private readonly bool _configured;
 
     // Port allocation ranges for Cuttlefish instances
@@ -40,6 +42,8 @@ public class CuttlefishService : ICuttlefishService
         _logger = logger;
         _twilioService = twilioService;
         _hostAddress = Environment.GetEnvironmentVariable("MCH_CUTTLEFISH_HOST") ?? "";
+        _hostUser = Environment.GetEnvironmentVariable("MCH_CUTTLEFISH_USER") ?? "root";
+        _hostPassword = Environment.GetEnvironmentVariable("MCH_CUTTLEFISH_PASS") ?? "";
         _configured = !string.IsNullOrEmpty(_hostAddress);
     }
 
@@ -906,9 +910,16 @@ public class CuttlefishService : ICuttlefishService
         }
         else
         {
-            // SSH to remote host
-            var sshCmd = $"-o StrictHostKeyChecking=no -o ConnectTimeout=10 {_hostAddress} '{command.Replace("'", "'\\''")}'";
-            return await ProcessRunner.RunAsync("ssh", sshCmd, timeoutMs, ct: ct);
+            var escapedCmd = command.Replace("'", "'\\''");
+            var sshArgs = $"-o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=30 {_hostUser}@{_hostAddress} '{escapedCmd}'";
+
+            // Use sshpass for password-based auth if password is configured
+            if (!string.IsNullOrEmpty(_hostPassword))
+            {
+                return await ProcessRunner.RunAsync("sshpass", $"-p {_hostPassword} ssh {sshArgs}", timeoutMs, ct: ct);
+            }
+
+            return await ProcessRunner.RunAsync("ssh", sshArgs, timeoutMs, ct: ct);
         }
     }
 
