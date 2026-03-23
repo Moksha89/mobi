@@ -1,0 +1,139 @@
+<UserControl x:Class="MobileControlHub.UI.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <StackPanel Margin="0,8" MaxWidth="700" HorizontalAlignment="Left">
+
+        <!-- ==================== Tool Paths ==================== -->
+        <Border Style="{StaticResource CardPanel}">
+            <StackPanel>
+                <TextBlock Text="Tool Paths" Style="{StaticResource SubheadingStyle}" Margin="0,0,0,12"/>
+
+                <!-- ADB Path -->
+                <TextBlock Text="ADB Executable Path" Style="{StaticResource LabelStyle}"/>
+                <DockPanel Margin="0,0,0,8">
+                    <Button Content="Browse" Style="{StaticResource SecondaryButton}"
+                            Command="{Binding BrowseAdbCommand}" DockPanel.Dock="Right"
+                            Margin="8,0,0,0" Padding="12,6"/>
+                    <TextBox Style="{StaticResource DarkTextBox}"
+                             Text="{Binding AdbPath, UpdateSourceTrigger=PropertyChanged}"/>
+                </DockPanel>
+
+                <!-- scrcpy Path -->
+                <TextBlock Text="scrcpy Executable Path" Style="{StaticResource LabelStyle}"/>
+                <DockPanel Margin="0,0,0,8">
+                    <Button Content="Browse" Style="{StaticResource SecondaryButton}"
+                            Command="{Binding BrowseScrcpyCommand}" DockPanel.Dock="Right"
+                            Margin="8,0,0,0" Padding="12,6"/>
+                    <TextBox Style="{StaticResource DarkTextBox}"
+                             Text="{Binding ScrcpyPath, UpdateSourceTrigger=PropertyChanged}"/>
+                </DockPanel>
+
+                <!-- RustDesk Path -->
+                <TextBlock Text="RustDesk Executable Path" Style="{StaticResource LabelStyle}"/>
+                <DockPanel Margin="0,0,0,0">
+                    <Button Content="Browse" Style="{StaticResource SecondaryButton}"
+                            Command="{Binding BrowseRustDeskCommand}" DockPanel.Dock="Right"
+                            Margin="8,0,0,0" Padding="12,6"/>
+                    <TextBox Style="{StaticResource DarkTextBox}"
+                             Text="{Binding RustDeskPath, UpdateSourceTrigger=PropertyChanged}"/>
+                </DockPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- ==================== Monitoring Settings ==================== -->
+        <Border Style="{StaticResource CardPanel}">
+            <StackPanel>
+                <TextBlock Text="Monitoring" Style="{StaticResource SubheadingStyle}" Margin="0,0,0,12"/>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition/>
+                        <RowDefinition/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,8,8">
+                        <TextBlock Text="Device Poll Interval (seconds)" Style="{StaticResource LabelStyle}"/>
+                        <TextBox Style="{StaticResource DarkTextBox}"
+                                 Text="{Binding PollInterval, UpdateSourceTrigger=PropertyChanged}"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="0" Grid.Column="1" Margin="8,0,0,8">
+                        <TextBlock Text="ADB Timeout (seconds)" Style="{StaticResource LabelStyle}"/>
+                        <TextBox Style="{StaticResource DarkTextBox}"
+                                 Text="{Binding AdbTimeout, UpdateSourceTrigger=PropertyChanged}"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,8,0">
+                        <TextBlock Text="Max Retry Attempts" Style="{StaticResource LabelStyle}"/>
+                        <TextBox Style="{StaticResource DarkTextBox}"
+                                 Text="{Binding MaxRetries, UpdateSourceTrigger=PropertyChanged}"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="1" Grid.Column="1" Margin="8,0,0,0">
+                        <TextBlock Text="Retry Delay (seconds)" Style="{StaticResource LabelStyle}"/>
+                        <TextBox Style="{StaticResource DarkTextBox}"
+                                 Text="{Binding RetryDelay, UpdateSourceTrigger=PropertyChanged}"/>
+                    </StackPanel>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <!-- ==================== Auto-Reconnect & scrcpy ==================== -->
+        <Border Style="{StaticResource CardPanel}">
+            <StackPanel>
+                <TextBlock Text="Automation" Style="{StaticResource SubheadingStyle}" Margin="0,0,0,12"/>
+
+                <CheckBox Style="{StaticResource DarkCheckBox}" Content="Auto-reconnect devices"
+                          IsChecked="{Binding AutoReconnect}" Margin="0,0,0,8"/>
+                <CheckBox Style="{StaticResource DarkCheckBox}" Content="Auto-restart scrcpy sessions"
+                          IsChecked="{Binding AutoRestartScrcpy}" Margin="0,0,0,12"/>
+
+                <TextBlock Text="Default scrcpy Arguments" Style="{StaticResource LabelStyle}"/>
+                <TextBox Style="{StaticResource DarkTextBox}"
+                         Text="{Binding DefaultScrcpyArgs, UpdateSourceTrigger=PropertyChanged}"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ==================== Startup ==================== -->
+        <Border Style="{StaticResource CardPanel}">
+            <StackPanel>
+                <TextBlock Text="Startup" Style="{StaticResource SubheadingStyle}" Margin="0,0,0,12"/>
+
+                <CheckBox Style="{StaticResource DarkCheckBox}" Content="Start on Windows boot"
+                          IsChecked="{Binding StartOnBoot}" Margin="0,0,0,8"/>
+                <CheckBox Style="{StaticResource DarkCheckBox}" Content="Start monitoring on launch"
+                          IsChecked="{Binding StartMonitorOnLaunch}" Margin="0,0,0,8"/>
+                <CheckBox Style="{StaticResource DarkCheckBox}" Content="Restore previous sessions on launch"
+                          IsChecked="{Binding RestoreSessionsOnLaunch}"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ==================== Import/Export ==================== -->
+        <Border Style="{StaticResource CardPanel}">
+            <DockPanel>
+                <TextBlock Text="Configuration" Style="{StaticResource SubheadingStyle}"
+                           DockPanel.Dock="Left" VerticalAlignment="Center"/>
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right">
+                    <Button Content="Export JSON" Style="{StaticResource SecondaryButton}"
+                            Command="{Binding ExportConfigCommand}" Margin="0,0,8,0"/>
+                    <Button Content="Import JSON" Style="{StaticResource SecondaryButton}"
+                            Command="{Binding ImportConfigCommand}"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- ==================== Save Button ==================== -->
+        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+            <Button Content="Save Settings" Style="{StaticResource PrimaryButton}"
+                    Command="{Binding SaveCommand}" Margin="0,0,12,0"/>
+            <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center"
+                       Foreground="{StaticResource TextSecondaryBrush}" FontSize="12"/>
+        </StackPanel>
+
+    </StackPanel>
+</UserControl>

@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>MobileControlHub.WebApi</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Common" Version="8.0.0" />
+    <PackageReference Include="System.Drawing.Common" Version="8.0.0" />
+    <PackageReference Include="Twilio" Version="7.14.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MobileControlHub.Domain\MobileControlHub.Domain.csproj" />
+    <ProjectReference Include="..\MobileControlHub.Infrastructure\MobileControlHub.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

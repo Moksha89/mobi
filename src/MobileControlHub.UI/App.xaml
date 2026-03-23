@@ -1,0 +1,20 @@
+<Application x:Class="MobileControlHub.UI.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:converters="clr-namespace:MobileControlHub.UI.Converters"
+             StartupUri="MainWindow.xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Themes/DarkTheme.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- Register converters globally -->
+            <converters:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
+            <converters:BoolToStatusColorConverter x:Key="BoolToStatusColor"/>
+            <converters:ConnectionStateToColorConverter x:Key="StateToColor"/>
+            <converters:LogLevelToColorConverter x:Key="LogLevelToColor"/>
+            <converters:BatteryLevelToColorConverter x:Key="BatteryToColor"/>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: android-cloud
+  labels:
+    app: mobile-control-hub
+    component: android-cloud
